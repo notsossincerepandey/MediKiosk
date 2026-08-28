@@ -1,0 +1,2079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediKiosk – AI Patient Intake & Doctor Platform</title>
+  <!-- Google Fonts & Lucide Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- REQUIRED: RecordRTC for Brave/Firefox/Safari Audio Support -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/RecordRTC/5.6.2/RecordRTC.min.js"></script>
+
+  <style>
+    :root {
+      --primary: #0284c7;
+      --primary-dark: #0369a1;
+      --primary-light: #e0f2fe;
+      --accent: #0d9488;
+      --accent-light: #ccfbf1;
+      --danger: #ef4444;
+      --danger-light: #fee2e2;
+      --warning: #f59e0b;
+      --warning-light: #fef3c7;
+      --success: #10b981;
+      --success-light: #d1fae5;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 18px;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif; }
+    body { background-color: var(--bg); color: var(--text-main); min-height: 100vh; display: flex; flex-direction: column; }
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0.75rem 1.5rem; position: sticky; top: 0; z-index: 50; display: flex; justify-content: space-between; align-items: center; box-shadow: var(--shadow-sm); }
+    .brand { display: flex; align-items: center; gap: 0.6rem; font-size: 1.25rem; font-weight: 800; color: var(--primary-dark); cursor: pointer; }
+    .brand i { color: var(--primary); }
+    .nav-right { display: flex; align-items: center; gap: 1rem; }
+    .nav-tabs { display: flex; gap: 0.35rem; background: var(--bg); padding: 0.25rem; border-radius: var(--radius-md); border: 1px solid var(--border); }
+    .nav-btn { padding: 0.45rem 0.85rem; border: none; background: transparent; border-radius: var(--radius-sm); font-weight: 600; font-size: 0.82rem; cursor: pointer; color: var(--text-muted); transition: all 0.2s ease; display: flex; align-items: center; gap: 0.4rem; }
+    .nav-btn.active { background: var(--surface); color: var(--primary); box-shadow: var(--shadow-sm); }
+    .user-pill { display: none; align-items: center; gap: 0.6rem; background: var(--primary-light); padding: 0.35rem 0.8rem; border-radius: 9999px; font-size: 0.8rem; font-weight: 600; color: var(--primary-dark); }
+    .main-container { flex: 1; max-width: 1100px; width: 100%; margin: 1.5rem auto; padding: 0 1rem; }
+    .view-panel { display: none; animation: fadeIn 0.3s ease; }
+    .view-panel.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .card { background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); padding: 1.5rem; box-shadow: var(--shadow); margin-bottom: 1.5rem; }
+    .auth-card { max-width: 440px; margin: 2rem auto; padding: 2rem; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.65rem 1.25rem; font-size: 0.9rem; font-weight: 600; border-radius: var(--radius-sm); border: none; cursor: pointer; transition: all 0.2s; text-decoration: none; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-secondary { background: #f1f5f9; color: var(--text-main); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: #e2e8f0; }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-sm { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
+    .input-field { width: 100%; padding: 0.65rem 0.9rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.9rem; outline: none; transition: border-color 0.2s; }
+    .input-field:focus { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 0.35rem; color: var(--text-muted); }
+    .badge { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; }
+    .badge-danger { background: var(--danger-light); color: var(--danger); }
+    .badge-success { background: var(--success-light); color: var(--success); }
+    .badge-primary { background: var(--primary-light); color: var(--primary-dark); }
+    .hero { text-align: center; padding: 2rem 1rem; max-width: 700px; margin: 0 auto; }
+    .hero h1 { font-size: 2.2rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.75rem; line-height: 1.2; }
+    .hero p { font-size: 0.95rem; color: var(--text-muted); margin-bottom: 2rem; }
+    .portal-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
+    .portal-card { background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius-lg); padding: 2rem 1.5rem; text-align: center; cursor: pointer; transition: all 0.25s ease; box-shadow: var(--shadow); }
+    .portal-card:hover { border-color: var(--primary); transform: translateY(-4px); box-shadow: var(--shadow-lg); }
+    .portal-icon { width: 64px; height: 64px; border-radius: 50%; background: var(--primary-light); color: var(--primary); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 1.25rem; }
+    .chat-box { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg); height: 300px; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+    .chat-msg { max-width: 80%; padding: 0.75rem 1rem; border-radius: var(--radius-md); font-size: 0.9rem; line-height: 1.4; }
+    .chat-msg.bot { background: var(--surface); border: 1px solid var(--border); align-self: flex-start; border-bottom-left-radius: 2px; }
+    .chat-msg.user { background: var(--primary); color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
+    .token-display { text-align: center; background: linear-gradient(135deg, var(--primary-dark), var(--accent)); color: white; border-radius: var(--radius-lg); padding: 2rem; margin-bottom: 1.5rem; }
+    .token-number { font-size: 3.5rem; font-weight: 800; letter-spacing: 2px; margin: 0.5rem 0; }
+    .doctor-layout { display: grid; grid-template-columns: 300px 1fr; gap: 1.5rem; }
+    @media (max-width: 900px) { .doctor-layout { grid-template-columns: 1fr; } }
+    .queue-list { display: flex; flex-direction: column; gap: 0.75rem; max-height: 520px; overflow-y: auto; }
+    .queue-item { padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); cursor: pointer; transition: all 0.2s; }
+    .queue-item:hover, .queue-item.active { border-color: var(--primary); background: var(--primary-light); }
+    .rx-table { width: 100%; border-collapse: collapse; margin-top: 0.75rem; font-size: 0.85rem; }
+    .rx-table th, .rx-table td { border: 1px solid var(--border); padding: 0.6rem; text-align: left; }
+    .rx-table th { background: var(--bg); font-weight: 600; }
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px); z-index: 100; align-items: center; justify-content: center; }
+    .modal-content { background: white; border-radius: var(--radius-md); max-width: 600px; width: 90%; padding: 1.5rem; box-shadow: var(--shadow-lg); text-align: center; position: relative; }
+    .modal-close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; font-size: 1.25rem; cursor: pointer; color: var(--text-muted); }
+    
+    /* Recording animation */
+    .recording-pulse { animation: pulseAnim 1s infinite alternate; background-color: #fee2e2 !important; border-color: #fca5a5 !important; }
+    @keyframes pulseAnim { from { transform: scale(1); } to { transform: scale(1.05); } }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation -->
+  <header>
+    <div class="brand" onclick="switchView('landing')">
+      <i data-lucide="cross-circle"></i>
+      <span>MediKiosk</span>
+    </div>
+
+    <div class="nav-right">
+      <div class="nav-tabs" id="nav-tabs">
+        <button class="nav-btn active" id="tab-landing" onclick="switchView('landing')">
+          <i data-lucide="home" style="width:16px;height:16px;"></i> Home
+        </button>
+        <button class="nav-btn" id="tab-patient-login" onclick="switchView('patient-login')">
+          <i data-lucide="user" style="width:16px;height:16px;"></i> Patient Login
+        </button>
+        <button class="nav-btn" id="tab-doctor-login" onclick="switchView('doctor-login')">
+          <i data-lucide="stethoscope" style="width:16px;height:16px;"></i> Doctor Login
+        </button>
+      </div>
+
+      <!-- Active User Profile Indicator -->
+      <div class="user-pill" id="user-pill">
+        <i data-lucide="user-check" style="width:16px;height:16px;"></i>
+        <span id="user-display-name">User</span>
+        <button onclick="logoutUser()" class="btn btn-secondary btn-sm" style="padding: 0.15rem 0.5rem; margin-left: 0.25rem;">
+          Logout
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="main-container">
+
+    <!-- 1. LANDING / ROLE SELECTOR VIEW -->
+    <section id="view-landing" class="view-panel active">
+      <div class="hero">
+        <h1>Fast-Track OPD Intake & Multilingual AI Triage</h1>
+        <p>Voice-enabled kiosk intake in Hindi and English. Live integration with PostgreSQL.</p>
+
+        <div class="portal-choices">
+          <div class="portal-card" onclick="switchView('patient-login')">
+            <div class="portal-icon">
+              <i data-lucide="smartphone" style="width:32px;height:32px;"></i>
+            </div>
+            <h3>Patient / Kiosk Portal</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.4rem;">
+              मरीज़ लॉगिन (OTP / ABHA), बोलकर लक्षण बताएं एवं टोकन पाएं
+            </p>
+            <button class="btn btn-primary" style="margin-top: 1.25rem; width: 100%;">
+              Login with Mobile OTP <i data-lucide="arrow-right" style="width:16px;height:16px;"></i>
+            </button>
+          </div>
+
+          <div class="portal-card" onclick="switchView('doctor-login')">
+            <div class="portal-icon" style="background: var(--accent-light); color: var(--accent);">
+              <i data-lucide="shield-check" style="width:32px;height:32px;"></i>
+            </div>
+            <h3>Doctor Staff Portal</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.4rem;">
+              डॉक्टर लॉगिन, लाइव ओपीडी कतार एवं डिजिटल पर्ची
+            </p>
+            <button class="btn btn-secondary" style="margin-top: 1.25rem; width: 100%;">
+              Doctor Login (Password) <i data-lucide="arrow-right" style="width:16px;height:16px;"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. PATIENT LOGIN VIEW (OTP BASED) -->
+    <section id="view-patient-login" class="view-panel">
+      <div class="card auth-card">
+        <div style="text-align: center; margin-bottom: 1.25rem;">
+          <div class="portal-icon" style="margin: 0 auto 0.75rem auto;">
+            <i data-lucide="phone-call" style="width:28px;height:28px;"></i>
+          </div>
+          <h2 style="font-size: 1.35rem;">Patient Login / Kiosk</h2>
+          <p style="font-size: 0.85rem; color: var(--text-muted);">Login with Mobile Number or ABHA ID. Linking an ABHA ID to your profile is a one-time step — once linked, you won't be asked again.</p>
+        </div>
+
+        <!-- STEP: choose identifier + auth method -->
+        <!-- STEP: choose identifier + auth method -->
+<div id="login-select-step">
+  <div class="form-group">
+    <label>Login With</label>
+    <div style="display:flex; gap:0.5rem;">
+      <button type="button" class="btn btn-primary" id="id-type-mobile-btn" style="flex:1;" onclick="selectLoginIdentifier('MOBILE')">📱 Mobile Number</button>
+      <button type="button" class="btn btn-secondary" id="id-type-abha-btn" style="flex:1;" onclick="selectLoginIdentifier('ABHA')">🆔 ABHA ID</button>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label id="login-identifier-label">Mobile Number / फ़ोन नंबर</label>
+    <div style="display:flex; gap:0.5rem;">
+      <span id="login-identifier-prefix" style="padding: 0.65rem 0.8rem; background:#f1f5f9; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:0.9rem; font-weight:600;">+91</span>
+      <input type="text" id="login-identifier-input" class="input-field" placeholder="9876543210" value="9876543210" maxlength="10" />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label>Date of Birth <span style="font-weight:400; color:var(--text-muted);">(Required)</span></label>
+    <input type="date" id="login-dob-input" class="input-field" />
+  </div>
+
+  <!-- Dynamic Section: Hidden until DOB and Mobile are checked -->
+  <button class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;" id="login-check-btn" onclick="checkUserExistence()">
+    Continue <i data-lucide="arrow-right" style="width:16px;"></i>
+  </button>
+
+  <div id="dynamic-auth-options" style="display:none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+    <div class="form-group" id="new-user-name-group" style="display:none;">
+      <label>Full Name <span style="font-weight:400; color:var(--text-muted);">(New Account Registration)</span></label>
+      <input type="text" id="login-name-input" class="input-field" placeholder="e.g. Shubh Pandey" />
+    </div>
+
+    <div class="form-group" id="auth-method-toggle-group">
+      <label>Authenticate Via</label>
+      <div style="display:flex; gap:0.5rem;">
+        <button type="button" class="btn btn-primary" id="auth-method-otp-btn" style="flex:1;" onclick="selectLoginMethod('OTP')">OTP</button>
+        <button type="button" class="btn btn-secondary" id="auth-method-password-btn" style="flex:1;" onclick="selectLoginMethod('PASSWORD')">Password</button>
+      </div>
+    </div>
+
+    <div class="form-group" id="login-password-field" style="display:none;">
+      <label>Password</label>
+      <input type="password" id="login-password-input" class="input-field" placeholder="••••••••" />
+      <p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.35rem;">
+        Your default password is your date of birth in <strong>MMDDYY</strong> format (e.g. 14 May 1998 → <strong>051498</strong>).
+      </p>
+    </div>
+
+    <div class="form-group">
+      <label>Preferred Language (भाषा चुनें)</label>
+      <select id="p-login-lang" class="input-field" onchange="updateSelectedLanguage()">
+        <option value="Hindi">हिंदी (Hindi / Hinglish Voice)</option>
+        <option value="English">English</option>
+      </select>
+    </div>
+
+    <button class="btn btn-success" style="width: 100%; margin-top: 0.5rem;" id="login-submit-btn" onclick="submitLoginCredentials()">
+      Send 4-Digit OTP <i data-lucide="arrow-right" style="width:16px;"></i>
+    </button>
+  </div>
+</div>
+
+        <!-- STEP: OTP verification for login -->
+        <div id="login-otp-step" style="display:none; animation: fadeIn 0.3s ease;">
+          <div style="background: var(--warning-light); border: 1px solid var(--warning); border-radius: var(--radius-sm); padding: 0.6rem; margin-bottom: 1rem; font-size: 0.8rem; color: #92400e; display: flex; justify-content: space-between; align-items: center;">
+            <span>Demo OTP: <strong>4321</strong></span>
+            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('login-otp-input').value='4321'">Auto-Fill</button>
+          </div>
+
+          <div class="form-group">
+            <label>Enter 4-Digit Verification Code</label>
+            <input type="text" id="login-otp-input" class="input-field" placeholder="• • • •" maxlength="4" style="letter-spacing: 6px; font-size: 1.25rem; text-align: center;" />
+          </div>
+
+          <button class="btn btn-success" style="width: 100%;" onclick="verifyLoginOTP()">
+            Verify & Continue <i data-lucide="check" style="width:16px;"></i>
+          </button>
+        </div>
+
+        <!-- STEP: mandatory ABHA gate (shown after mobile-number login) -->
+        <div id="abha-mandatory-step" style="display:none; animation: fadeIn 0.3s ease;">
+          <div style="background:#fef2f2; border:1px solid #fecaca; border-radius:var(--radius-sm); padding:0.75rem; margin-bottom:1.1rem; font-size:0.8rem; color:#7f1d1d; display:flex; gap:0.5rem; align-items:flex-start;">
+            <i data-lucide="alert-triangle" style="width:16px; flex-shrink:0; margin-top:0.1rem;"></i>
+            <span>Linking an ABHA ID to your profile is <strong>mandatory</strong> before you can continue to OPD intake. This is a <strong>one-time</strong> step — you won't be asked again on future visits unless you delink it.</span>
+          </div>
+
+          <button class="btn btn-primary" style="width:100%; margin-bottom:0.6rem;" onclick="showAbhaLinkExisting()">
+            🆔 I already have an ABHA ID — Link it
+          </button>
+          <button class="btn btn-secondary" style="width:100%;" onclick="showAbhaCreate()">
+            ➕ I don't have an ABHA ID — Create one
+          </button>
+        </div>
+
+        <!-- STEP: link an existing ABHA ID -->
+        <div id="abha-link-step" style="display:none; animation: fadeIn 0.3s ease;">
+          <div class="form-group">
+            <label>ABHA Number or ABHA Address</label>
+            <input type="text" id="abha-link-input" class="input-field" placeholder="14-1234-5678-9012 or name@abdm" />
+          </div>
+          <button class="btn btn-primary" style="width:100%;" onclick="sendAbhaLinkOTP()">
+            Send OTP to Link <i data-lucide="arrow-right" style="width:16px;"></i>
+          </button>
+          <button class="btn btn-secondary btn-sm" style="width:100%; margin-top:0.5rem;" onclick="showLoginStep('abha-mandatory-step')">← Back</button>
+        </div>
+
+        <div id="abha-link-otp-step" style="display:none; animation: fadeIn 0.3s ease;">
+          <div style="background: var(--warning-light); border: 1px solid var(--warning); border-radius: var(--radius-sm); padding: 0.6rem; margin-bottom: 1rem; font-size: 0.8rem; color: #92400e; display: flex; justify-content: space-between; align-items: center;">
+            <span>Demo OTP: <strong>4321</strong></span>
+            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('abha-link-otp-input').value='4321'">Auto-Fill</button>
+          </div>
+          <div class="form-group">
+            <label>Enter 4-Digit Verification Code</label>
+            <input type="text" id="abha-link-otp-input" class="input-field" placeholder="• • • •" maxlength="4" style="letter-spacing: 6px; font-size: 1.25rem; text-align: center;" />
+          </div>
+          <button class="btn btn-success" style="width:100%;" onclick="verifyAbhaLinkOTP()">
+            Verify & Link ABHA <i data-lucide="check" style="width:16px;"></i>
+          </button>
+        </div>
+
+        <!-- STEP: create a new ABHA ID -->
+        <div id="abha-create-step" style="display:none; animation: fadeIn 0.3s ease;">
+          <div class="form-group">
+            <label>Full Name</label>
+            <input type="text" id="abha-create-name" class="input-field" placeholder="e.g. Shubh Pandey" />
+          </div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label>Date of Birth</label>
+              <input type="date" id="abha-create-dob" class="input-field" />
+            </div>
+            <div class="form-group">
+              <label>Gender</label>
+              <select id="abha-create-gender" class="input-field">
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Aadhaar-Linked Mobile Number</label>
+            <input type="tel" id="abha-create-mobile" class="input-field" placeholder="9876543210" maxlength="10" />
+          </div>
+          <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.75rem;">
+            In the real ABDM flow this step verifies your Aadhaar via a UIDAI OTP. This demo simulates that verification.
+          </p>
+          <button class="btn btn-primary" style="width:100%;" onclick="sendAbhaCreateOTP()">
+            Send OTP & Create ABHA ID <i data-lucide="arrow-right" style="width:16px;"></i>
+          </button>
+          <button class="btn btn-secondary btn-sm" style="width:100%; margin-top:0.5rem;" onclick="showLoginStep('abha-mandatory-step')">← Back</button>
+        </div>
+
+        <div id="abha-create-otp-step" style="display:none; animation: fadeIn 0.3s ease;">
+          <div style="background: var(--warning-light); border: 1px solid var(--warning); border-radius: var(--radius-sm); padding: 0.6rem; margin-bottom: 1rem; font-size: 0.8rem; color: #92400e; display: flex; justify-content: space-between; align-items: center;">
+            <span>Demo OTP: <strong>4321</strong></span>
+            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('abha-create-otp-input').value='4321'">Auto-Fill</button>
+          </div>
+          <div class="form-group">
+            <label>Enter 4-Digit Verification Code</label>
+            <input type="text" id="abha-create-otp-input" class="input-field" placeholder="• • • •" maxlength="4" style="letter-spacing: 6px; font-size: 1.25rem; text-align: center;" />
+          </div>
+          <button class="btn btn-success" style="width:100%;" onclick="verifyAbhaCreateOTP()">
+            Verify & Generate ABHA ID <i data-lucide="check" style="width:16px;"></i>
+          </button>
+        </div>
+
+        <!-- STEP: ABHA linked/created confirmation -->
+        <div id="abha-success-step" style="display:none; animation: fadeIn 0.3s ease; text-align:center;">
+          <div class="portal-icon" style="background:#dcfce7; color:#16a34a; margin: 0 auto 0.75rem auto;">
+            <i data-lucide="check-circle" style="width:28px;height:28px;"></i>
+          </div>
+          <h3 style="font-size:1.1rem; margin-bottom:0.5rem;">ABHA ID Linked Successfully</h3>
+          <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.2rem;">ABHA Number: <strong id="abha-success-number">—</strong></p>
+          <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">ABHA Address: <strong id="abha-success-address">—</strong></p>
+          <button class="btn btn-primary" style="width:100%;" onclick="finalizeAbhaAndProceed()">
+            Continue to OPD Intake <i data-lucide="arrow-right" style="width:16px;"></i>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. DOCTOR LOGIN VIEW (PASSWORD BASED) -->
+    <section id="view-doctor-login" class="view-panel">
+      <div class="card auth-card">
+        <div style="text-align: center; margin-bottom: 1.25rem;">
+          <div class="portal-icon" style="background: var(--accent-light); color: var(--accent); margin: 0 auto 0.75rem auto;">
+            <i data-lucide="lock" style="width:28px;height:28px;"></i>
+          </div>
+          <h2 style="font-size: 1.35rem;">Doctor Staff Portal</h2>
+          <p style="font-size: 0.85rem; color: var(--text-muted);">Sign in with your hospital credentials</p>
+        </div>
+
+        <div class="form-group">
+          <label>Doctor Staff ID / Email</label>
+          <input type="text" id="doc-id-input" class="input-field" value="dr.amit.sharma@aiims.gov.in" placeholder="dr.id@hospital.gov.in" />
+        </div>
+
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="doc-pwd-input" class="input-field" placeholder="••••••••" />
+          <p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.35rem;">
+            Default password is your date of birth in <strong>MMDDYY</strong> format. Change it anytime from the dashboard after signing in.
+          </p>
+        </div>
+
+        <button class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;" onclick="loginDoctor()">
+          Sign In to OPD Queue <i data-lucide="log-in" style="width:16px;"></i>
+        </button>
+      </div>
+    </section>
+
+    <!-- 4. PATIENT INTAKE FLOW VIEW -->
+    <section id="view-patient" class="view-panel">
+      <!-- STEP 0: Consultation Type (Fresh vs Follow-up) -->
+      <div id="patient-step-0" class="card" style="display:none;">
+        <div id="abha-status-row" style="display:flex; justify-content:space-between; align-items:center; background:var(--primary-light); border-radius:var(--radius-sm); padding:0.6rem 0.9rem; margin-bottom:1rem; font-size:0.8rem;">
+          <span>🆔 ABHA Linked: <strong id="abha-status-text">—</strong></span>
+          <button class="btn btn-secondary btn-sm" onclick="delinkAbha()">Delink ABHA</button>
+        </div>
+
+        <div style="margin-bottom:1.25rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="togglePasswordReset()">🔑 Change Password</button>
+          <button class="btn btn-secondary btn-sm" onclick="switchView('reviews')">⭐ Rate Your Visit</button>
+          <div id="password-reset-form" style="display:none; margin-top:0.75rem; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:0.9rem; width:100%;">
+            <div class="form-group">
+              <label>Current Password</label>
+              <input type="password" id="reset-current-password" class="input-field" placeholder="Current password" />
+            </div>
+            <div class="form-group" style="margin-bottom:0.5rem;">
+              <label>New Password</label>
+              <input type="password" id="reset-new-password" class="input-field" placeholder="New password (min 4 characters)" />
+            </div>
+            <button class="btn btn-primary btn-sm" style="width:100%;" onclick="submitPasswordReset()">Update Password</button>
+          </div>
+        </div>
+
+        <h2 style="font-size: 1.25rem; margin-bottom: 0.5rem; display:flex; align-items:center; gap:0.5rem;">
+          <i data-lucide="calendar-check" style="color:var(--primary);"></i> What brings you in today?
+        </h2>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+          Let the doctor know if this is a new issue or a follow-up on a past consultation.
+        </p>
+
+        <div class="portal-choices" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+          <div class="portal-card" id="consult-type-fresh-card" onclick="selectConsultationType('FRESH')">
+            <div class="portal-icon">
+              <i data-lucide="plus-circle" style="width:28px;height:28px;"></i>
+            </div>
+            <h3 style="font-size:1rem;">Fresh Consultation</h3>
+            <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0.4rem;">A new health concern I haven't discussed with a doctor here before.</p>
+          </div>
+          <div class="portal-card" id="consult-type-followup-card" onclick="selectConsultationType('FOLLOWUP')">
+            <div class="portal-icon" style="background: var(--accent-light); color: var(--accent);">
+              <i data-lucide="repeat" style="width:28px;height:28px;"></i>
+            </div>
+            <h3 style="font-size:1rem;">Follow-up Consultation</h3>
+            <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0.4rem;">Continuing care for something already seen before.</p>
+          </div>
+        </div>
+
+        <!-- Shown only once "Follow-up" is picked -->
+        <div id="followup-history-picker" style="display:none; margin-top:1.25rem;">
+          <label style="display:block; font-size:0.82rem; font-weight:600; margin-bottom:0.5rem; color:var(--text-muted);">
+            Which past visit is this a follow-up to? (optional)
+          </label>
+          <div id="followup-history-list" style="display:flex; flex-direction:column; gap:0.5rem; max-height:220px; overflow-y:auto;">
+            <!-- populated dynamically from /api/patient/{id}/consultations -->
+          </div>
+          <button class="btn btn-primary" style="width:100%; margin-top:1rem;" onclick="proceedToIntake()">
+            Continue <i data-lucide="arrow-right" style="width:16px;"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- STEP 1: Personal Details -->
+      <div id="patient-step-1" class="card">
+        <h2 style="font-size: 1.25rem; margin-bottom: 0.5rem; display:flex; align-items:center; gap:0.5rem;">
+          <i data-lucide="building-2" style="color:var(--primary);"></i> Step 1: Patient Demographic Details
+        </h2>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+          Enter the patient details below. These will be recorded in PostgreSQL.
+        </p>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label>Current Hospital Location</label>
+            <select id="p-hospital" class="input-field">
+              <option value="AIIMS New Delhi">AIIMS, New Delhi (Main OPD)</option>
+              <option value="Safdarjung Hospital">Safdarjung Hospital, New Delhi</option>
+              <option value="KGMU Lucknow">KGMU, Lucknow (Centenary OPD)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Registered Phone / ABHA</label>
+            <input type="text" id="p-auth-phone" class="input-field" value="9876543210" readonly style="background:#f8fafc;" />
+          </div>
+
+          <div class="form-group">
+            <label>Full Name (पूरा नाम)</label>
+            <input type="text" id="p-name" class="input-field" placeholder="e.g. Shubh Pandey" value="Shubh Pandey" />
+          </div>
+
+          <div class="form-group">
+            <label>Age & Gender (उम्र एवं लिंग)</label>
+            <div style="display:flex; gap:0.5rem;">
+              <input type="number" id="p-age" class="input-field" placeholder="Age" value="21" style="width:40%;" />
+              <select id="p-gender" class="input-field" style="width:60%;">
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
+          <button class="btn btn-primary" onclick="goToPatientStep(2)">
+            Next: Voice AI Clinical Triage <i data-lucide="arrow-right" style="width:16px;"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- STEP 2: Voice & Text Clinical Triage -->
+      <div id="patient-step-2" class="card" style="display: none;">
+        <h2 style="font-size: 1.25rem; margin-bottom: 0.5rem; display:flex; align-items:center; gap:0.5rem;">
+          <i data-lucide="bot" style="color:var(--primary);"></i> Step 2: Voice & Text Multilingual AI Triage
+        </h2>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+          Click the <strong>Microphone</strong> to speak. MediKiosk will process your voice on the server.
+        </p>
+
+        <div class="grid-2">
+          <div>
+            <div class="chat-box" id="ai-chat-history">
+              <div class="chat-msg bot" id="bot-welcome-msg">
+                नमस्ते! आपको क्या तकलीफ़ है? बोलकर या लिखकर बताएं। (What symptoms are you experiencing today?)
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+              <input type="text" id="chat-input" class="input-field" placeholder="Type or click mic to speak..." onkeypress="if(event.key === 'Enter') sendChatMessage()" />
+
+              <!-- RECORD RTC MIC BUTTON -->
+              <button class="btn btn-secondary" id="mic-btn" onclick="toggleVoiceInput()" title="Record Voice">
+                <i data-lucide="mic" style="color:var(--danger); width:18px;"></i>
+              </button>
+
+              <button class="btn btn-primary" onclick="sendChatMessage()">
+                <i data-lucide="send" style="width:16px;"></i>
+              </button>
+            </div>
+            
+            <p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.4rem;" id="speech-status-indicator">
+              🎙️ Click mic to start recording.
+            </p>
+          </div>
+
+          <!-- Document / OCR Simulation -->
+          <div style="background: var(--bg); border: 1px dashed var(--border); border-radius: var(--radius-md); padding: 1.25rem; text-align: center;">
+            <i data-lucide="file-scan" style="width: 36px; height: 36px; color: var(--primary); margin-bottom: 0.5rem;"></i>
+            <h4>Upload Previous Prescriptions / Lab Reports</h4>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0.4rem 0 1rem 0;">
+              AI will extract your active medications and vitals.
+            </p>
+
+            <button class="btn btn-secondary" onclick="simulateOCRScan()">
+              <i data-lucide="camera" style="width:16px;"></i> Scan Document via Camera
+            </button>
+
+            <div id="ocr-results" style="display:none; text-align:left; margin-top:1rem; background:white; padding:0.75rem; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.8rem;">
+              <span class="badge badge-success">OCR Extracted</span>
+              <p style="margin-top:0.4rem;"><strong>Past Rx:</strong> Tab Metformin 500mg (OD)</p>
+              <p><strong>Recent Labs:</strong> BP: 140/90 mmHg | Sugar: Normal</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI Recommendation Card -->
+        <div id="ai-match-card" style="display:none; margin-top: 1.5rem; background: var(--primary-light); border: 1px solid var(--primary); border-radius: var(--radius-md); padding: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <span class="badge badge-primary">AI Triage Match</span>
+              <h4 id="match-doc-title" style="margin-top: 0.3rem;">Dr. Amit Sharma (Cardiology - Room 102)</h4>
+              <p style="font-size: 0.8rem; color: var(--text-main); margin-top: 0.2rem;" id="match-reason-text">
+                Symptoms matched to OPD schedule. Ready to generate token.
+              </p>
+            </div>
+            <button class="btn btn-primary" onclick="generateToken()">
+              Confirm & Get Token <i data-lucide="ticket" style="width:16px;"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 3: Token Display -->
+      <div id="patient-step-3" style="display: none;">
+        <div class="token-display">
+          <p style="font-size: 1rem; opacity: 0.9;">Your OPD Consultation Token</p>
+          <div class="token-number" id="generated-token-num">OPD-102</div>
+          <p style="font-size: 1.1rem; font-weight: 600;" id="token-doc-info">Dr. Amit Sharma • Cardiology (Room 102)</p>
+          <p style="font-size: 0.85rem; margin-top: 0.5rem; opacity: 0.85;">
+            Estimated wait time: ~10 minutes
+          </p>
+        </div>
+
+        <div class="card" style="text-align: center;">
+          <h3>Your Pre-consultation summary has been sent to PostgreSQL and Doctor's live queue.</h3>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.4rem;">
+            Please proceed to Room 102.
+          </p>
+          <p style="font-size: 0.8rem; margin-top: 0.5rem;">
+            <span class="badge badge-primary" id="token-consult-type-badge">Fresh Consultation</span>
+          </p>
+          <button class="btn btn-secondary" style="margin-top: 1rem;" onclick="switchView('doctor-login')">
+            Switch to Doctor Login to View Live Queue <i data-lucide="arrow-right" style="width:16px;"></i>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. DOCTOR CONSULTATION DASHBOARD -->
+    <section id="view-doctor" class="view-panel">
+      <div class="card" style="padding: 1rem; margin-bottom: 1rem; display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; align-items:center; gap:0.75rem;">
+          <div style="width:40px; height:40px; border-radius:50%; background:var(--primary); color:white; display:flex; align-items:center; justify-content:center; font-weight:700;">
+            AS
+          </div>
+          <div>
+            <h3 style="font-size: 1rem;" id="doc-header-name">Dr. Amit Sharma</h3>
+            <p style="font-size: 0.75rem; color: var(--text-muted);" id="doc-header-room">Cardiology • OPD Room 102 • AIIMS New Delhi</p>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:0.5rem; align-items:center;">
+          <button class="btn btn-secondary btn-sm" onclick="toggleDoctorPasswordReset()">🔑 Change Password</button>
+          <button class="btn btn-primary btn-sm" onclick="fetchLiveDoctorQueue()">
+            <i data-lucide="refresh-cw" style="width:14px;"></i> Refresh Queue
+          </button>
+        </div>
+      </div>
+
+      <div id="doctor-password-reset-form" class="card" style="display:none; padding:1rem; margin-bottom:1rem;">
+        <div class="grid-2">
+          <div class="form-group" style="margin-bottom:0.5rem;">
+            <label>Current Password</label>
+            <input type="password" id="doc-reset-current-password" class="input-field" placeholder="Current password" />
+          </div>
+          <div class="form-group" style="margin-bottom:0.5rem;">
+            <label>New Password</label>
+            <input type="password" id="doc-reset-new-password" class="input-field" placeholder="New password (min 4 characters)" />
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="submitDoctorPasswordReset()">Update Password</button>
+      </div>
+
+      <div class="doctor-layout">
+        <!-- Live Queue Sidebar -->
+        <div class="card" style="padding: 1rem;">
+          <h4 style="font-size: 0.9rem; margin-bottom: 0.75rem; display:flex; justify-content:space-between;">
+            <span>Live OPD Queue</span>
+            <span class="badge badge-primary" id="queue-count-badge">0 Waiting</span>
+          </h4>
+
+          <div class="queue-list" id="dynamic-queue-list">
+            <!-- Dynamically populated from FastAPI -->
+          </div>
+        </div>
+
+        <!-- Main Clinical Details & Rx Editor -->
+        <div>
+          <!-- Red Flag Warning Banner -->
+          <div id="ai-alert-banner" class="card" style="background: var(--danger-light); border-color: var(--danger); padding: 0.9rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.75rem;">
+            <i data-lucide="alert-triangle" style="color: var(--danger);"></i>
+            <div>
+              <strong style="color: var(--danger); font-size: 0.85rem;">Medical Alerts:</strong>
+              <span style="font-size: 0.85rem; color: #7f1d1d;" id="doc-p-alerts">Known Allergies: Penicillin | Chronic: Diabetes</span>
+            </div>
+          </div>
+
+          <!-- Structured Clinical Intake Card -->
+          <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+              <div>
+                <h3 style="font-size: 1.1rem;">Patient: <span id="doc-p-name">Shubh Pandey</span></h3>
+                <p style="font-size:0.8rem; color:var(--text-muted);" id="doc-p-meta">Age: 21 • Gender: Male • Token #OPD-102</p>
+              </div>
+              <div style="display:flex; gap:0.5rem;">
+                <button class="btn btn-secondary btn-sm" onclick="openPatientHistory()">
+                  <i data-lucide="folder-clock" style="width:14px;"></i> View Past Medical History
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="openPrescriptionImageModal()">
+                  <i data-lucide="image" style="width:14px;"></i> 👁️ View Original Prescription Image
+                </button>
+              </div>
+            </div>
+
+            <div class="grid-2" style="margin-top: 1rem; font-size: 0.85rem;">
+              <div>
+                <p style="color:var(--text-muted);"><strong>Current Symptoms (this visit):</strong></p>
+                <p style="margin-bottom:0.6rem;" id="doc-current-symptoms">None</p>
+
+                <p style="color:var(--text-muted);"><strong>Patient-Reported Medical History (from conversation):</strong></p>
+                <p style="margin-bottom:0.6rem;" id="doc-reported-history">None</p>
+
+                <p style="color:var(--text-muted);"><strong>AI Structured Triage:</strong></p>
+                <p style="margin-bottom:0.6rem;" id="doc-ai-summary">None</p>
+
+                <details style="margin-bottom:0.6rem;">
+                  <summary style="color:var(--text-muted); cursor:pointer; font-weight:600;">Full Conversation Transcript</summary>
+                  <p style="margin-top:0.4rem;" id="doc-transcript">None</p>
+                </details>
+              </div>
+
+              <div>
+                <p style="color:var(--text-muted);"><strong>Permanent Allergies:</strong></p>
+                <p style="margin-bottom:0.6rem;" id="doc-p-allergies-list">Penicillin, Sulfa drugs</p>
+
+                <p style="color:var(--text-muted);"><strong>Permanent Chronic Illnesses:</strong></p>
+                <p style="margin-bottom:1rem;" id="doc-p-chronic-list">Type 2 Diabetes, Hypertension</p>
+
+                <!-- NEW: Extracted File Data Section -->
+                <div style="background: var(--bg); border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 0.85rem;">
+                  <p style="color:var(--text-main); font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
+                    <i data-lucide="file-scan" style="width:14px; color: var(--primary);"></i> Extracted File Data
+                  </p>
+                  <div id="doc-extracted-file-data" style="font-size: 0.8rem; color: var(--text-main);">
+                    <p style="margin-bottom:0.3rem;"><strong>Blood Group:</strong> O Positive (O+)</p>
+                    <p style="margin-bottom:0.3rem;"><strong>Latest Vitals:</strong> BP 120/80 mmHg</p>
+                    <p><strong>Recent Labs:</strong> HbA1c 6.2%</p>
+                  </div>
+                  <p style="font-size:0.7rem; color:var(--text-muted); margin-top:0.6rem; font-style: italic;">
+                    * Auto-extracted from patient's uploaded documents via OCR.
+                  </p>
+                </div>
+              </div>
+
+            <hr style="border:none; border-top:1px solid var(--border); margin:1.25rem 0;" />
+
+            <h4 style="font-size: 0.95rem; margin-bottom: 0.75rem;">Doctor's Diagnosis & Digital Prescription</h4>
+
+            <div class="form-group">
+              <label>Clinical Impression / Final Diagnosis</label>
+              <input type="text" id="doc-diagnosis" class="input-field" value="Suspected Angina Pectoris / Acute Coronary Syndrome" />
+            </div>
+
+            <label style="font-size:0.85rem; font-weight:600; color:var(--text-muted);">Prescribed Medicines</label>
+            <table class="rx-table" id="rx-table">
+              <thead>
+                <tr>
+                  <th>Medicine</th>
+                  <th>Dose</th>
+                  <th>Frequency</th>
+                  <th>Duration</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Tab Sorbitrate (Isosorbide Dinitrate)</td>
+                  <td>5 mg</td>
+                  <td>Sublingual STAT</td>
+                  <td>1 Day</td>
+                </tr>
+                <tr>
+                  <td>Tab Ecosprin (Aspirin)</td>
+                  <td>150 mg</td>
+                  <td>1-0-0 (After Food)</td>
+                  <td>30 Days</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div style="margin-top: 1.25rem; display:flex; justify-content:space-between; align-items:center;">
+           <button class="btn btn-secondary btn-sm" onclick="addMedicineRow()">
+             <i data-lucide="plus" style="width:14px;"></i> Add Medicine
+           </button>
+
+           <div style="display:flex; gap:0.5rem;">
+             <button class="btn btn-secondary" onclick="openPatientReviewPrompt()">
+               <i data-lucide="star" style="width:16px;"></i> Rate Patient
+             </button>
+             <button class="btn btn-success" onclick="completeConsultation()">
+               <i data-lucide="check-circle" style="width:16px;"></i> Complete Consultation
+             </button>
+           </div>
+         </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5B. PATIENT PAST MEDICAL HISTORY (classified) -->
+    <section id="view-patient-history" class="view-panel">
+      <div class="card" style="padding: 1rem; margin-bottom: 1rem; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <h3 style="font-size: 1.1rem;">Past Medical History</h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted);" id="hist-p-meta">—</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="switchView('doctor')">
+          <i data-lucide="arrow-left" style="width:14px;"></i> Back to Queue
+        </button>
+      </div>
+
+      <div id="hist-loading" style="text-align:center; padding:2rem; color:var(--text-muted); font-size:0.85rem;">Loading history…</div>
+
+      <div id="hist-content" style="display:none;">
+        <div class="grid-2" style="gap:1rem;">
+          <div class="card">
+            <h4 style="font-size:0.9rem; margin-bottom:0.6rem; display:flex; align-items:center; gap:0.4rem;">
+              <i data-lucide="alert-octagon" style="width:15px; color:var(--danger);"></i> Known Allergies
+            </h4>
+            <p style="font-size:0.85rem;" id="hist-allergies">None recorded</p>
+          </div>
+          <div class="card">
+            <h4 style="font-size:0.9rem; margin-bottom:0.6rem; display:flex; align-items:center; gap:0.4rem;">
+              <i data-lucide="activity" style="width:15px; color:var(--accent);"></i> Chronic Illnesses
+            </h4>
+            <p style="font-size:0.85rem;" id="hist-chronic">None recorded</p>
+          </div>
+          <div class="card">
+            <h4 style="font-size:0.9rem; margin-bottom:0.6rem; display:flex; align-items:center; gap:0.4rem;">
+              <i data-lucide="scissors" style="width:15px; color:var(--primary);"></i> Past Surgeries
+            </h4>
+            <p style="font-size:0.85rem;" id="hist-surgeries">None recorded</p>
+          </div>
+          <div class="card">
+            <h4 style="font-size:0.9rem; margin-bottom:0.6rem; display:flex; align-items:center; gap:0.4rem;">
+              <i data-lucide="file-scan" style="width:15px; color:var(--primary);"></i> Extracted From Uploaded Documents
+            </h4>
+            <div id="hist-documents" style="font-size:0.85rem;">No uploaded documents on file.</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:1rem;">
+          <h4 style="font-size:0.9rem; margin-bottom:0.75rem; display:flex; align-items:center; gap:0.4rem;">
+            <i data-lucide="calendar-clock" style="width:15px; color:var(--text-muted);"></i> Past Consultations
+          </h4>
+          <div id="hist-consultations">No past consultations on file.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. REVIEW VIEW -->
+    <section id="view-reviews" class="view-panel">
+      <div class="grid-2">
+        <div class="card">
+          <span class="badge badge-primary">Patient Feedback (Anonymous)</span>
+          <h3 style="margin: 0.6rem 0 0.2rem 0;">Rate Doctor's Bedside Manner</h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Help future patients know how the doctor communicates and listens.
+          </p>
+
+          <div class="form-group">
+            <label>Your Rating</label>
+            <div id="review-star-picker" style="display:flex; gap:0.35rem; font-size:1.8rem; cursor:pointer; margin-top:0.3rem;">
+              <span class="review-star" data-value="1" onclick="selectReviewRating(1)">☆</span>
+              <span class="review-star" data-value="2" onclick="selectReviewRating(2)">☆</span>
+              <span class="review-star" data-value="3" onclick="selectReviewRating(3)">☆</span>
+              <span class="review-star" data-value="4" onclick="selectReviewRating(4)">☆</span>
+              <span class="review-star" data-value="5" onclick="selectReviewRating(5)">☆</span>
+            </div>
+            <p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.3rem;" id="review-rating-label">Tap a star to rate.</p>
+          </div>
+
+          <div class="form-group">
+            <label>Comments (optional)</label>
+            <textarea id="review-comment" class="input-field" rows="3" placeholder="What went well, or what could be better?"></textarea>
+          </div>
+
+          <button class="btn btn-primary" style="width:100%; margin-top:0.5rem;" onclick="submitDoctorReview()">
+            Submit Anonymous Doctor Review
+          </button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- On-Demand Image Viewer Modal -->
+  <div id="image-modal" class="modal-overlay">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closePrescriptionImageModal()">&times;</button>
+      <h3 style="margin-bottom:0.75rem;">Original Uploaded Prescription</h3>
+      <img src="https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=500" alt="Prescription Scan" style="max-width:100%; border-radius:var(--radius-sm); border:1px solid var(--border);" />
+      <p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.5rem;">Loaded securely from object storage reference (prescriptions_ocr)</p>
+    </div>
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    let currentUser = null;
+    let cachedQueue = [];
+    let collectedSymptoms = []; // current-visit complaints, classified by AI per message
+    let collectedHistory = []; // patient-reported medical history, classified by AI per message
+    let conversationHistory = []; // full {role,text} turn history sent back to the AI each request, so it has memory
+    let latestSymptomSummary = '';   // AI-written professional summary of current symptoms
+    let latestHistorySummary = '';   // AI-written professional summary of past history/allergies
+    let latestDepartment = '';
+    let latestDoctorName = '';
+    let latestUrgency = 'ROUTINE';
+    let latestPriorityLevel = 3;
+    let selectedQueueId = null; // queue_id of whichever patient the doctor currently has open
+    let selectedPatientId = null; // patient_id of whichever patient the doctor currently has open
+    let patientId = null;       // persistent patient profile id (get-or-created at login)
+    let abhaLinked = false;     // whether this patient's profile already has an ABHA ID linked
+    let consultationType = 'FRESH';   // 'FRESH' | 'FOLLOWUP' — chosen after login, sent with intake
+    let followUpOfTriageId = null;    // optional triage_session_id this follow-up relates to
+
+    // --- RECORD_RTC GLOBALS ---
+    let recorder = null;
+    let isRecording = false;
+    let currentStream = null; // <-- Added active stream tracking
+
+    // --- SILENCE DETECTION (auto-stop recording) GLOBALS ---
+    let vadAudioContext = null;
+    let vadAnalyser = null;
+    let vadIntervalId = null;
+    const VAD_SILENCE_RMS_THRESHOLD = 0.02; // below this = "silence"
+    const VAD_SILENCE_STOP_MS = 1500;       // stop after this much continuous silence, once speech was heard
+    const VAD_MAX_RECORDING_MS = 20000;     // hard safety cap so it can never record forever
+
+    // --- VIEW SWITCHER ---
+    function switchView(viewName) {
+      document.querySelectorAll('.view-panel').forEach(panel => panel.classList.remove('active'));
+      document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+
+      const activePanel = document.getElementById(`view-${viewName}`);
+      const activeTab = document.getElementById(`tab-${viewName}`);
+
+      if (activePanel) activePanel.classList.add('active');
+      if (activeTab) activeTab.classList.add('active');
+
+      if (viewName === 'doctor') {
+        fetchLiveDoctorQueue();
+      }
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      lucide.createIcons();
+    }
+
+    // --- UNIVERSAL BACKEND-PROCESSED AUDIO RECORDING (auto-stops on silence) ---
+    async function toggleVoiceInput() {
+      if (isRecording) {
+        stopRecordingAndProcess();
+        return;
+      }
+      await startRecording();
+    }
+
+    async function startRecording() {
+      const micBtn = document.getElementById('mic-btn');
+      const indicator = document.getElementById('speech-status-indicator');
+
+      try {
+        currentStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        recorder = RecordRTC(currentStream, {
+          type: 'audio',
+          mimeType: 'audio/wav',
+          recorderType: StereoAudioRecorder,
+          desiredSampRate: 16000
+        });
+        recorder.startRecording();
+        isRecording = true;
+
+        micBtn.classList.add('recording-pulse');
+        indicator.innerText = "🔴 Listening... it'll send automatically once you stop talking.";
+        indicator.style.color = "var(--danger)";
+
+        startSilenceDetection(currentStream);
+      } catch (err) {
+        console.error("Mic error:", err);
+        indicator.innerText = "⚠️ Microphone permission denied.";
+        indicator.style.color = "var(--danger)";
+      }
+    }
+
+    // Watches mic volume via an AnalyserNode and auto-stops recording once the
+    // patient has spoken and then gone quiet for VAD_SILENCE_STOP_MS. A hard
+    // VAD_MAX_RECORDING_MS cap guarantees it can never record forever even if
+    // silence is never cleanly detected (e.g. noisy kiosk environment).
+    function startSilenceDetection(stream) {
+      stopSilenceDetection(); // clear any stale detector first
+
+      vadAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = vadAudioContext.createMediaStreamSource(stream);
+      vadAnalyser = vadAudioContext.createAnalyser();
+      vadAnalyser.fftSize = 512;
+      source.connect(vadAnalyser);
+
+      const dataArray = new Uint8Array(vadAnalyser.frequencyBinCount);
+      const recordingStartedAt = Date.now();
+      let hasHeardSpeech = false;
+      let silenceStartedAt = null;
+
+      vadIntervalId = setInterval(() => {
+        vadAnalyser.getByteTimeDomainData(dataArray);
+
+        let sumSquares = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          const normalized = (dataArray[i] - 128) / 128;
+          sumSquares += normalized * normalized;
+        }
+        const rms = Math.sqrt(sumSquares / dataArray.length);
+
+        if (rms > VAD_SILENCE_RMS_THRESHOLD) {
+          hasHeardSpeech = true;
+          silenceStartedAt = null;
+        } else if (hasHeardSpeech) {
+          if (silenceStartedAt === null) silenceStartedAt = Date.now();
+          else if (Date.now() - silenceStartedAt > VAD_SILENCE_STOP_MS) {
+            stopRecordingAndProcess();
+            return;
+          }
+        }
+
+        if (Date.now() - recordingStartedAt > VAD_MAX_RECORDING_MS) {
+          stopRecordingAndProcess();
+        }
+      }, 150);
+    }
+
+    function stopSilenceDetection() {
+      if (vadIntervalId) { clearInterval(vadIntervalId); vadIntervalId = null; }
+      if (vadAudioContext) { vadAudioContext.close(); vadAudioContext = null; }
+      vadAnalyser = null;
+    }
+
+    function stopRecordingAndProcess() {
+      if (!isRecording || !recorder) return;
+      stopSilenceDetection();
+
+      const micBtn = document.getElementById('mic-btn');
+      const indicator = document.getElementById('speech-status-indicator');
+
+      recorder.stopRecording(async function() {
+        let blob = recorder.getBlob();
+        isRecording = false;
+        micBtn.classList.remove('recording-pulse');
+        indicator.innerText = "⏳ Uploading and processing voice on server...";
+        indicator.style.color = "var(--warning)";
+
+        // --- COMPLETELY RELEASE THE MICROPHONE HARDWARE ---
+        if (currentStream) {
+          currentStream.getTracks().forEach(track => track.stop());
+          currentStream = null;
+        }
+
+        const formData = new FormData();
+        formData.append('file', blob, 'voice.wav');
+        formData.append('language', document.getElementById('p-login-lang').value);
+        formData.append('history', JSON.stringify(conversationHistory));
+
+        try {
+          const response = await fetch('http://127.0.0.1:8000/api/ai/voice-chat', {
+            method: 'POST',
+            body: formData
+          });
+          const data = await response.json();
+
+          if (!response.ok) {
+            console.error('Voice chat error:', data.detail);
+            indicator.innerText = `⚠️ ${data.detail || 'Server error processing voice.'}`;
+            indicator.style.color = "var(--danger)";
+            return;
+          }
+
+          if (data.transcript && data.transcript !== "Audio unclear.") {
+            if (data.symptom_type === 'MEDICAL_HISTORY') {
+              collectedHistory.push(data.transcript);
+            } else {
+              collectedSymptoms.push(data.transcript);
+            }
+            document.getElementById('chat-input').value = data.transcript;
+            appendChatMessage(data.transcript, 'user');
+            conversationHistory.push({ role: 'user', text: data.transcript });
+          }
+
+          conversationHistory.push({ role: 'model', text: data.reply });
+          if (data.symptom_summary) latestSymptomSummary = data.symptom_summary;
+          if (data.history_summary) latestHistorySummary = data.history_summary;
+
+          appendChatMessage(data.reply, 'bot');
+          speakText(data.reply);
+
+          if (data.ready_for_triage) {
+            latestDepartment = data.matched_department;
+            latestDoctorName = data.doctor_name;
+            latestUrgency = data.urgency;
+            latestPriorityLevel = data.priority_level;
+            document.getElementById('match-doc-title').innerText = data.doctor_name;
+            document.getElementById('match-reason-text').innerText = `Department: ${data.matched_department} • Urgency: Level ${data.priority_level}`;
+            document.getElementById('ai-match-card').style.display = 'block';
+          }
+
+          indicator.innerText = "🎙️ Voice processed successfully.";
+          indicator.style.color = "var(--success)";
+        } catch (err) {
+          console.error(err);
+          indicator.innerText = "⚠️ Server error processing voice. Is FastAPI running?";
+          indicator.style.color = "var(--danger)";
+        }
+      });
+    }
+
+    // --- TEXT TO SPEECH ---
+    function speakText(text) {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const langChoice = document.getElementById('p-login-lang').value;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = (langChoice === 'Hindi') ? 'hi-IN' : 'en-IN';
+      utterance.rate = 0.95;
+      
+      const voices = window.speechSynthesis.getVoices();
+      const targetLang = (langChoice === 'Hindi') ? 'hi' : 'en';
+      const voice = voices.find(v => v.lang.startsWith(targetLang));
+      if (voice) utterance.voice = voice;
+      
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function updateSelectedLanguage() {
+      const lang = document.getElementById('p-login-lang').value;
+      const welcome = document.getElementById('bot-welcome-msg');
+      if (lang === 'English') {
+        welcome.innerText = "Hello! What symptoms or health concerns are you experiencing today?";
+      } else {
+        welcome.innerText = "नमस्ते! आपको क्या तकलीफ़ है? बोलकर या लिखकर बताएं।";
+      }
+    }
+
+    // --- TEXT CHAT HANDLER ---
+    async function sendChatMessage() {
+      const input = document.getElementById('chat-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      appendChatMessage(text, 'user');
+      input.value = '';
+
+      const langChoice = document.getElementById('p-login-lang').value;
+
+      try {
+        const response = await fetch('http://127.0.0.1:8000/api/ai/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text, language: langChoice, history: conversationHistory })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          appendChatMessage(data.detail || 'Something went wrong. Please try again.', 'bot');
+          return;
+        }
+
+        if (data.symptom_type === 'MEDICAL_HISTORY') {
+          collectedHistory.push(text);
+        } else {
+          collectedSymptoms.push(text);
+        }
+
+        conversationHistory.push({ role: 'user', text: text });
+        conversationHistory.push({ role: 'model', text: data.reply });
+        if (data.symptom_summary) latestSymptomSummary = data.symptom_summary;
+        if (data.history_summary) latestHistorySummary = data.history_summary;
+
+        appendChatMessage(data.reply, 'bot');
+        speakText(data.reply);
+
+        if (data.ready_for_triage) {
+          latestDepartment = data.matched_department;
+          latestDoctorName = data.doctor_name;
+          latestUrgency = data.urgency;
+          latestPriorityLevel = data.priority_level;
+          document.getElementById('match-doc-title').innerText = data.doctor_name;
+          document.getElementById('match-reason-text').innerText = `Department: ${data.matched_department} • Urgency: Priority Level ${data.priority_level}`;
+          document.getElementById('ai-match-card').style.display = 'block';
+        }
+
+      } catch (err) {
+        console.error("AI Endpoint Error:", err);
+        appendChatMessage('Could not reach the server. Please check your connection and try again.', 'bot');
+      }
+    }
+
+    function appendChatMessage(msg, type) {
+      const chatBox = document.getElementById('ai-chat-history');
+      const div = document.createElement('div');
+      div.className = `chat-msg ${type}`;
+      div.innerText = msg;
+      chatBox.appendChild(div);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    // --- PATIENT AUTH ---
+    // --- PATIENT LOGIN: choose identifier type + auth method ---
+    let loginIdentifierType = 'MOBILE'; // 'MOBILE' | 'ABHA'
+    let loginAuthMethod = 'OTP';        // 'OTP' | 'PASSWORD'
+
+    function selectLoginIdentifier(type) {
+      loginIdentifierType = type;
+
+      const mobileBtn = document.getElementById('id-type-mobile-btn');
+      const abhaBtn = document.getElementById('id-type-abha-btn');
+      mobileBtn.classList.toggle('btn-primary', type === 'MOBILE');
+      mobileBtn.classList.toggle('btn-secondary', type !== 'MOBILE');
+      abhaBtn.classList.toggle('btn-primary', type === 'ABHA');
+      abhaBtn.classList.toggle('btn-secondary', type !== 'ABHA');
+
+      const label = document.getElementById('login-identifier-label');
+      const prefix = document.getElementById('login-identifier-prefix');
+      const input = document.getElementById('login-identifier-input');
+
+      if (type === 'MOBILE') {
+        label.innerText = 'Mobile Number / फ़ोन नंबर';
+        prefix.style.display = '';
+        input.placeholder = '9876543210';
+        input.maxLength = 10;
+        input.value = '9876543210';
+      } else {
+        label.innerText = 'ABHA Number / ABHA Address';
+        prefix.style.display = 'none';
+        input.placeholder = '14-1234-5678-9012 or name@abdm';
+        input.removeAttribute('maxlength');
+        input.value = '';
+      }
+    }
+
+    function selectLoginMethod(method) {
+      loginAuthMethod = method;
+
+      const otpBtn = document.getElementById('auth-method-otp-btn');
+      const pwdBtn = document.getElementById('auth-method-password-btn');
+      otpBtn.classList.toggle('btn-primary', method === 'OTP');
+      otpBtn.classList.toggle('btn-secondary', method !== 'OTP');
+      pwdBtn.classList.toggle('btn-primary', method === 'PASSWORD');
+      pwdBtn.classList.toggle('btn-secondary', method !== 'PASSWORD');
+
+      document.getElementById('login-password-field').style.display = method === 'PASSWORD' ? 'block' : 'none';
+
+      const submitBtn = document.getElementById('login-submit-btn');
+      submitBtn.innerHTML = method === 'OTP'
+        ? 'Send 4-Digit OTP <i data-lucide="arrow-right" style="width:16px;"></i>'
+        : 'Sign In <i data-lucide="log-in" style="width:16px;"></i>';
+      lucide.createIcons();
+    }
+
+    function submitLoginCredentials() {
+      const identifier = document.getElementById('login-identifier-input').value.trim();
+      if (!identifier) {
+        alert(loginIdentifierType === 'MOBILE' ? 'Please enter a valid mobile number.' : 'Please enter your ABHA number or address.');
+        return;
+      }
+      if (loginIdentifierType === 'MOBILE' && identifier.length < 10) {
+        alert('Please enter a valid 10-digit mobile number.');
+        return;
+      }
+
+      if (loginAuthMethod === 'PASSWORD') {
+        authenticateWithPassword(identifier);
+      } else {
+        showLoginStep('login-otp-step');
+      }
+    }
+
+    async function authenticateWithPassword(identifier) {
+      const pwd = document.getElementById('login-password-input').value;
+      if (!pwd) { alert('Please enter your password.'); return; }
+
+      // Also send name/DOB — needed only if this mobile number is brand new, in which
+      // case the backend registers the account on the spot (same as the OTP flow does).
+      const nameVal = document.getElementById('login-name-input').value.trim();
+      const dobVal = document.getElementById('login-dob-input').value; // "" or "YYYY-MM-DD"
+
+      try {
+        const res = await fetch('http://127.0.0.1:8000/api/patient/authenticate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mobile: identifier,
+            password: pwd,
+            full_name: nameVal || undefined,
+            dob: dobVal || undefined
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          alert(data.detail || 'Invalid mobile number or password.');
+          return;
+        }
+        finishLogin(identifier, data);
+      } catch (err) {
+        console.error('Password authentication failed:', err);
+        alert('Could not reach the server to sign in.');
+      }
+    }
+
+    async function verifyLoginOTP() {
+      const otp = document.getElementById('login-otp-input').value.trim();
+      if (otp !== '4321') {
+        alert('Invalid OTP. Use demo OTP: 4321');
+        return;
+      }
+      const identifier = document.getElementById('login-identifier-input').value.trim();
+      const nameVal = document.getElementById('login-name-input').value.trim();
+      const dobVal = document.getElementById('login-dob-input').value; // "" or "YYYY-MM-DD"
+
+      try {
+        const res = await fetch('http://127.0.0.1:8000/api/patient/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mobile: identifier, full_name: nameVal || undefined, dob: dobVal || undefined })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          // Most likely: brand-new mobile number with no DOB supplied yet.
+          alert(data.detail || 'Please enter your date of birth to finish setting up your account.');
+          return;
+        }
+        finishLogin(identifier, data);
+      } catch (err) {
+        console.error('Patient login failed:', err);
+        alert('Could not reach the server to sign in.');
+      }
+    }
+
+    // Shared by both the OTP path and the password path once the server confirms who the
+    // patient is (or creates their profile for the first time).
+    function finishLogin(identifier, data) {
+      document.getElementById('p-auth-phone').value = identifier;
+      currentUser = { role: 'PATIENT', name: data.full_name || 'Patient' };
+      collectedSymptoms = []; // fresh triage session per patient
+      collectedHistory = [];
+      conversationHistory = [];
+      latestSymptomSummary = '';
+      latestHistorySummary = '';
+      latestDepartment = '';
+      latestDoctorName = '';
+      latestUrgency = 'ROUTINE';
+      latestPriorityLevel = 3;
+      consultationType = 'FRESH';
+      followUpOfTriageId = null;
+      document.getElementById('ai-match-card').style.display = 'none';
+
+      patientId = data.patient_id ?? null;
+      abhaLinked = !!data.abha_linked;
+      // Logging in with an ABHA ID directly means it's already linked — skip the mandatory-link gate.
+      if (loginIdentifierType === 'ABHA') abhaLinked = true;
+
+      updateAuthUI();
+
+      if (abhaLinked) {
+        switchView('patient');
+        goToPatientStep(0);
+      } else {
+        // No ABHA on this profile yet — linking is mandatory before intake, but only this once.
+        showLoginStep('abha-mandatory-step');
+      }
+    }
+
+    // Shows one step of the patient-login/ABHA card and hides the rest.
+    function showLoginStep(stepId) {
+      const steps = [
+        'login-select-step', 'login-otp-step', 'abha-mandatory-step',
+        'abha-link-step', 'abha-link-otp-step',
+        'abha-create-step', 'abha-create-otp-step', 'abha-success-step'
+      ];
+      steps.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = (id === stepId) ? 'block' : 'none';
+      });
+      lucide.createIcons();
+    }
+
+    // --- ABHA link-existing / create-new sub-flows ---
+    function showAbhaLinkExisting() { showLoginStep('abha-link-step'); }
+    function showAbhaCreate() { showLoginStep('abha-create-step'); }
+
+    function sendAbhaLinkOTP() {
+      const val = document.getElementById('abha-link-input').value.trim();
+      if (!val) { alert('Please enter your ABHA Number or ABHA Address.'); return; }
+      showLoginStep('abha-link-otp-step');
+    }
+
+    function verifyAbhaLinkOTP() {
+      const otp = document.getElementById('abha-link-otp-input').value.trim();
+      if (otp !== '4321') { alert('Invalid OTP. Use demo OTP: 4321'); return; }
+      const abhaVal = document.getElementById('abha-link-input').value.trim();
+      document.getElementById('abha-success-number').innerText = abhaVal;
+      document.getElementById('abha-success-address').innerText = abhaVal.includes('@') ? abhaVal : `${abhaVal.replace(/-/g, '')}@abdm`;
+      showLoginStep('abha-success-step');
+    }
+
+    function sendAbhaCreateOTP() {
+      const name = document.getElementById('abha-create-name').value.trim();
+      const mobile = document.getElementById('abha-create-mobile').value.trim();
+      if (!name || mobile.length < 10) { alert('Please fill in your name and a valid Aadhaar-linked mobile number.'); return; }
+      showLoginStep('abha-create-otp-step');
+    }
+
+    function verifyAbhaCreateOTP() {
+      const otp = document.getElementById('abha-create-otp-input').value.trim();
+      if (otp !== '4321') { alert('Invalid OTP. Use demo OTP: 4321'); return; }
+      const generatedNumber = '14-' + Math.floor(1000 + Math.random() * 9000) + '-' + Math.floor(1000 + Math.random() * 9000) + '-' + Math.floor(1000 + Math.random() * 9000);
+      const nameVal = document.getElementById('abha-create-name').value.trim().toLowerCase().replace(/\s+/g, '');
+      document.getElementById('abha-success-number').innerText = generatedNumber;
+      document.getElementById('abha-success-address').innerText = `${nameVal || 'patient'}@abdm`;
+      showLoginStep('abha-success-step');
+    }
+
+    async function finalizeAbhaAndProceed() {
+      abhaLinked = true;
+
+      // Persist the link server-side (one-time) so this patient never has to re-link on
+      // future logins unless they explicitly delink.
+      if (patientId) {
+        const abhaNumber = document.getElementById('abha-success-number').innerText;
+        const abhaAddress = document.getElementById('abha-success-address').innerText;
+        try {
+          await fetch('http://127.0.0.1:8000/api/patient/link-abha', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ patient_id: patientId, abha_number: abhaNumber, abha_address: abhaAddress })
+          });
+        } catch (err) {
+          console.error('Saving ABHA link failed:', err);
+        }
+      }
+
+      switchView('patient');
+      goToPatientStep(0);
+    }
+
+    function delinkAbha() {
+      if (!patientId) { alert('No linked patient profile found.'); return; }
+      if (!confirm('Delink your ABHA ID? You will need to link it again before your next visit.')) return;
+
+      fetch(`http://127.0.0.1:8000/api/patient/${patientId}/delink-abha`, { method: 'POST' })
+        .then(res => res.json())
+        .then(() => {
+          abhaLinked = false;
+          alert('ABHA ID delinked from your profile.');
+          switchView('patient-login');
+          showLoginStep('abha-mandatory-step');
+        })
+        .catch(err => {
+          console.error('Delink ABHA failed:', err);
+          alert('Could not delink ABHA ID — please try again.');
+        });
+    }
+
+    function updateAbhaStatusDisplay() {
+      const el = document.getElementById('abha-status-text');
+      if (el) el.innerText = abhaLinked ? 'Yes ✅' : 'No';
+    }
+
+    function togglePasswordReset() {
+      const form = document.getElementById('password-reset-form');
+      form.style.display = (form.style.display === 'none') ? 'block' : 'none';
+    }
+
+    async function submitPasswordReset() {
+      if (!patientId) { alert('No profile found — please log in again.'); return; }
+      const current = document.getElementById('reset-current-password').value;
+      const next = document.getElementById('reset-new-password').value;
+      if (!current || !next) { alert('Please fill in both fields.'); return; }
+
+      try {
+        const res = await fetch(`http://127.0.0.1:8000/api/patient/${patientId}/reset-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ current_password: current, new_password: next })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { alert(data.detail || 'Could not update password.'); return; }
+
+        alert('Password updated successfully.');
+        document.getElementById('reset-current-password').value = '';
+        document.getElementById('reset-new-password').value = '';
+        togglePasswordReset();
+      } catch (err) {
+        console.error('Password reset failed:', err);
+        alert('Could not reach the server to update password.');
+      }
+    }
+
+    function selectConsultationType(type) {
+      consultationType = type;
+      document.getElementById('consult-type-fresh-card').style.borderColor = (type === 'FRESH') ? 'var(--primary)' : 'var(--border)';
+      document.getElementById('consult-type-followup-card').style.borderColor = (type === 'FOLLOWUP') ? 'var(--primary)' : 'var(--border)';
+
+      if (type === 'FRESH') {
+        followUpOfTriageId = null;
+        document.getElementById('followup-history-picker').style.display = 'none';
+        goToPatientStep(1);
+      } else {
+        document.getElementById('followup-history-picker').style.display = 'block';
+        loadPastConsultations();
+      }
+    }
+
+    async function loadPastConsultations() {
+      const list = document.getElementById('followup-history-list');
+      list.innerHTML = '<p style="font-size:0.8rem; color:var(--text-muted);">Loading past visits…</p>';
+
+      if (!patientId) {
+        list.innerHTML = '<p style="font-size:0.8rem; color:var(--text-muted);">No profile on record yet — this will be logged as a follow-up without a linked past visit.</p>';
+        return;
+      }
+
+      try {
+        const res = await fetch(`http://127.0.0.1:8000/api/patient/${patientId}/consultations`);
+        const data = await res.json();
+        const consultations = data.consultations || [];
+
+        if (!consultations.length) {
+          list.innerHTML = '<p style="font-size:0.8rem; color:var(--text-muted);">No past visits found on record — you can still continue as a follow-up.</p>';
+          return;
+        }
+
+        list.innerHTML = '';
+        consultations.forEach(c => {
+          let dept = 'General Medicine';
+          try {
+            const summary = typeof c.ai_structured_summary === 'string' ? JSON.parse(c.ai_structured_summary) : c.ai_structured_summary;
+            if (summary && summary.department) dept = summary.department;
+          } catch (e) { /* keep default */ }
+
+          const dateStr = c.created_at ? new Date(c.created_at).toLocaleDateString() : 'Date unknown';
+
+          const item = document.createElement('div');
+          item.className = 'queue-item';
+          item.innerHTML = `<strong>${dept}</strong><p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.15rem;">${dateStr}</p>`;
+          item.onclick = () => {
+            followUpOfTriageId = c.triage_session_id;
+            document.querySelectorAll('#followup-history-list .queue-item').forEach(el => el.classList.remove('active'));
+            item.classList.add('active');
+          };
+          list.appendChild(item);
+        });
+      } catch (err) {
+        console.error('Past consultations fetch error:', err);
+        list.innerHTML = '<p style="font-size:0.8rem; color:var(--text-muted);">Could not load past visits — you can still continue.</p>';
+      }
+    }
+
+    function proceedToIntake() {
+      goToPatientStep(1);
+    }
+
+    async function loginDoctor() {
+      const staffId = document.getElementById('doc-id-input').value.trim();
+      const pwd = document.getElementById('doc-pwd-input').value;
+      if (!staffId || !pwd) { alert('Please enter your Staff ID and password.'); return; }
+
+      try {
+        const res = await fetch('http://127.0.0.1:8000/api/doctor/authenticate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ staff_id: staffId, password: pwd })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { alert(data.detail || 'Invalid Staff ID or password.'); return; }
+
+        currentUser = { role: 'DOCTOR', name: data.full_name, doctorId: data.doctor_id };
+        updateAuthUI();
+        switchView('doctor');
+      } catch (err) {
+        console.error('Doctor login failed:', err);
+        alert('Could not reach the server to sign in.');
+      }
+    }
+
+    function toggleDoctorPasswordReset() {
+      const form = document.getElementById('doctor-password-reset-form');
+      form.style.display = (form.style.display === 'none') ? 'block' : 'none';
+    }
+
+    async function submitDoctorPasswordReset() {
+      if (!currentUser || !currentUser.doctorId) { alert('Please sign in again.'); return; }
+      const current = document.getElementById('doc-reset-current-password').value;
+      const next = document.getElementById('doc-reset-new-password').value;
+      if (!current || !next) { alert('Please fill in both fields.'); return; }
+
+      try {
+        const res = await fetch(`http://127.0.0.1:8000/api/doctor/${currentUser.doctorId}/reset-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ current_password: current, new_password: next })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { alert(data.detail || 'Could not update password.'); return; }
+
+        alert('Password updated successfully.');
+        document.getElementById('doc-reset-current-password').value = '';
+        document.getElementById('doc-reset-new-password').value = '';
+        toggleDoctorPasswordReset();
+      } catch (err) {
+        console.error('Doctor password reset failed:', err);
+        alert('Could not reach the server to update password.');
+      }
+    }
+
+    function updateAuthUI() {
+      const userPill = document.getElementById('user-pill');
+      const displayName = document.getElementById('user-display-name');
+      if (currentUser) {
+        userPill.style.display = 'flex';
+        displayName.innerText = `${currentUser.name} (${currentUser.role})`;
+      } else {
+        userPill.style.display = 'none';
+      }
+    }
+
+    function logoutUser() {
+      currentUser = null;
+      patientId = null;
+      abhaLinked = false;
+      consultationType = 'FRESH';
+      followUpOfTriageId = null;
+      updateAuthUI();
+      showLoginStep('login-select-step');
+      document.getElementById('login-otp-input').value = '';
+      selectLoginIdentifier('MOBILE');
+      selectLoginMethod('OTP');
+      switchView('landing');
+    }
+
+    function goToPatientStep(stepNumber) {
+      document.getElementById('patient-step-0').style.display = 'none';
+      document.getElementById('patient-step-1').style.display = 'none';
+      document.getElementById('patient-step-2').style.display = 'none';
+      document.getElementById('patient-step-3').style.display = 'none';
+      document.getElementById(`patient-step-${stepNumber}`).style.display = 'block';
+      if (stepNumber === 0) updateAbhaStatusDisplay();
+      lucide.createIcons();
+    }
+
+    function simulateOCRScan() {
+      document.getElementById('ocr-results').style.display = 'block';
+      alert('Prescription Scanned: OCR text extracted & verified.');
+    }
+
+    // --- LIVE FASTAPI INTEGRATION: CREATE TOKEN ---
+    async function generateToken() {
+      const nameInput = document.getElementById('p-name').value.trim();
+      const phoneInput = document.getElementById('p-auth-phone').value.trim();
+      const ageInput = parseInt(document.getElementById('p-age').value, 10) || 21;
+      const genderInput = document.getElementById('p-gender').value;
+
+      const rawTranscript = conversationHistory
+        .map(turn => `${turn.role === 'user' ? 'Patient' : 'AI'}: ${turn.text}`)
+        .join('\n');
+
+      const payload = {
+        full_name: nameInput || "Shubh Pandey",
+        phone_number: phoneInput || "9876543210",
+        gender: genderInput,
+        age: ageInput,
+        symptoms: latestSymptomSummary || (collectedSymptoms.length ? collectedSymptoms.join(' | ') : "Mujhe 2 ghante se seene mein dard hai"),
+        medical_history: latestHistorySummary || collectedHistory.join(' | '),
+        full_transcript: rawTranscript,
+        department: latestDepartment || undefined,
+        urgency: latestUrgency,
+        priority_level: latestPriorityLevel,
+        allergies: ["Penicillin", "Sulfa drugs"],
+        chronic: ["Type 2 Diabetes", "Hypertension"],
+        patient_id: patientId || undefined,
+        consultation_type: consultationType,
+        follow_up_of: followUpOfTriageId || undefined
+      };
+
+      try {
+        const response = await fetch('http://127.0.0.1:8000/api/intake', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        if (result.status === 'success') {
+          document.getElementById('generated-token-num').innerText = result.token;
+          document.getElementById('token-consult-type-badge').innerText =
+            consultationType === 'FOLLOWUP' ? '🔁 Follow-up Consultation' : '🆕 Fresh Consultation';
+          goToPatientStep(3);
+        } else {
+          alert('Database Error: ' + JSON.stringify(result));
+        }
+      } catch (err) {
+        console.error('Fetch Error:', err);
+        alert('Could not connect to FastAPI server at http://127.0.0.1:8000. Is it running?');
+      }
+    }
+
+    // --- LIVE FASTAPI INTEGRATION: FETCH DOCTOR QUEUE ---
+    async function fetchLiveDoctorQueue() {
+      try {
+        const response = await fetch('http://127.0.0.1:8000/api/doctor/queue');
+        const data = await response.json();
+        cachedQueue = data.queue || [];
+
+        const queueContainer = document.getElementById('dynamic-queue-list');
+        const queueBadge = document.getElementById('queue-count-badge');
+        queueContainer.innerHTML = '';
+        queueBadge.innerText = `${cachedQueue.length} Waiting`;
+
+        if (cachedQueue.length === 0) {
+          queueContainer.innerHTML = `<p style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding:1rem;">No patients waiting in queue.</p>`;
+          return;
+        }
+
+        cachedQueue.forEach((patient, idx) => {
+          const item = document.createElement('div');
+          item.className = `queue-item ${idx === 0 ? 'active' : ''}`;
+          item.onclick = () => renderPatientDetails(idx);
+          item.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <strong>Token #OPD-${patient.token_number}</strong>
+              <div style="display:flex; align-items:center; gap:0.4rem;">
+                <span class="badge ${patient.speech_to_text_transcript && (patient.speech_to_text_transcript.includes('seene') || patient.speech_to_text_transcript.includes('chest') || patient.speech_to_text_transcript.includes('dard')) ? 'badge-danger' : 'badge-success'}">
+                  ${patient.speech_to_text_transcript && (patient.speech_to_text_transcript.includes('seene') || patient.speech_to_text_transcript.includes('chest') || patient.speech_to_text_transcript.includes('dard')) ? '🚨 Red Flag' : 'Routine'}
+                </span>
+                <button class="queue-remove-btn" title="Remove from queue" onclick="event.stopPropagation(); removeFromQueue(${patient.queue_id})" style="border:none; background:transparent; color:var(--text-muted); cursor:pointer; font-size:1rem; line-height:1; padding:0.1rem 0.3rem;">✕</button>
+              </div>
+            </div>
+            <p style="font-size: 0.8rem; margin-top: 0.2rem;">${patient.full_name} (${patient.gender})
+              <span class="badge ${patient.consultation_type === 'FOLLOWUP' ? 'badge-primary' : 'badge-success'}" style="margin-left:0.3rem;">
+                ${patient.consultation_type === 'FOLLOWUP' ? '🔁 Follow-up' : '🆕 Fresh'}
+              </span>
+            </p>
+            <p style="font-size: 0.75rem; color: var(--text-muted); text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">
+              ${patient.speech_to_text_transcript || 'No transcript'}
+            </p>
+          `;
+          queueContainer.appendChild(item);
+        });
+
+        if (cachedQueue.length > 0) {
+          renderPatientDetails(0);
+        }
+      } catch (err) {
+        console.error('Queue Fetch Error:', err);
+      }
+    }
+
+    function renderPatientDetails(index) {
+      const p = cachedQueue[index];
+      if (!p) return;
+      selectedQueueId = p.queue_id;
+      selectedPatientId = p.patient_id;
+
+      document.querySelectorAll('.queue-item').forEach((el, i) => {
+        el.classList.toggle('active', i === index);
+      });
+
+      document.getElementById('doc-p-name').innerText = p.full_name;
+      const consultLabel = p.consultation_type === 'FOLLOWUP' ? '🔁 Follow-up Consultation' : '🆕 Fresh Consultation';
+      document.getElementById('doc-p-meta').innerText = `${p.age_meta || 'Age: 21'} • Gender: ${p.gender} • Token #OPD-${p.token_number} • ${consultLabel}`;
+      document.getElementById('doc-transcript').innerText = p.speech_to_text_transcript || 'None';
+
+      let summaryHtml = '<span style="color:var(--text-muted);">None</span>';
+      let currentSymptomsText = 'None reported';
+      let historyText = 'None reported';
+
+      if (p.ai_structured_summary) {
+        try {
+          const summaryObj = typeof p.ai_structured_summary === 'string' 
+            ? JSON.parse(p.ai_structured_summary) 
+            : p.ai_structured_summary;
+
+          currentSymptomsText = summaryObj.primary_complaint || 'None reported';
+          historyText = summaryObj.history_notes || 'None reported';
+
+          summaryHtml = `
+            <div style="display:flex; flex-direction:column; gap:0.4rem;">
+              <div><span class="badge ${summaryObj.urgency === 'EMERGENCY' ? 'badge-danger' : 'badge-success'}">${summaryObj.urgency || 'ROUTINE'}</span></div>
+              <div><strong>Department:</strong> ${summaryObj.department || 'N/A'}</div>
+            </div>
+          `;
+        } catch (e) {
+          summaryHtml = String(p.ai_structured_summary);
+        }
+      }
+
+      document.getElementById('doc-current-symptoms').innerText = currentSymptomsText;
+      document.getElementById('doc-reported-history').innerText = historyText;
+      document.getElementById('doc-ai-summary').innerHTML = summaryHtml;
+
+      document.getElementById('doc-p-allergies-list').innerText = (p.known_allergies || []).join(', ') || 'None recorded';
+      document.getElementById('doc-p-chronic-list').innerText = (p.chronic_conditions || []).join(', ') || 'None recorded';
+      document.getElementById('doc-p-alerts').innerText = `Allergies: ${(p.known_allergies || []).join(', ') || 'None'} | Chronic: ${(p.chronic_conditions || []).join(', ') || 'None'}`;
+    }
+
+    function openPrescriptionImageModal() {
+      document.getElementById('image-modal').style.display = 'flex';
+    }
+
+    // --- PAST MEDICAL HISTORY (classified view, opened from the doctor dashboard) ---
+    async function openPatientHistory() {
+      if (!selectedPatientId) { alert('Select a patient from the queue first.'); return; }
+
+      switchView('patient-history');
+      document.getElementById('hist-loading').style.display = 'block';
+      document.getElementById('hist-content').style.display = 'none';
+
+      try {
+        const res = await fetch(`http://127.0.0.1:8000/api/patient/${selectedPatientId}/medical-history`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          alert(data.detail || 'Could not load medical history.');
+          switchView('doctor');
+          return;
+        }
+        renderPatientHistory(data);
+      } catch (err) {
+        console.error('Medical history fetch failed:', err);
+        alert('Could not reach the server to load medical history.');
+        switchView('doctor');
+      }
+    }
+
+    function renderPatientHistory(data) {
+      const patient = data.patient || {};
+      document.getElementById('hist-p-meta').innerText =
+        `${patient.full_name || 'Unknown patient'} • ${patient.gender || '—'} • DOB: ${patient.dob || 'Not on file'} • ${patient.phone_number || ''}`;
+
+      // Classified permanent-record fields
+      document.getElementById('hist-allergies').innerText = (patient.known_allergies || []).length
+        ? patient.known_allergies.join(', ') : 'None recorded';
+      document.getElementById('hist-chronic').innerText = (patient.chronic_conditions || []).length
+        ? patient.chronic_conditions.join(', ') : 'None recorded';
+      document.getElementById('hist-surgeries').innerText = (patient.past_surgeries || []).length
+        ? patient.past_surgeries.join(', ') : 'None recorded';
+
+      // Documents (uploaded images/PDFs run through OCR) — classify each extracted field
+      // under the same headings rather than dumping raw JSON.
+      const docsEl = document.getElementById('hist-documents');
+      const documents = data.documents || [];
+      if (!documents.length) {
+        docsEl.innerHTML = 'No uploaded documents on file.';
+      } else {
+        docsEl.innerHTML = documents.map(doc => {
+          const extracted = doc.extracted_data || {};
+          const knownFieldLabels = {
+            blood_group: 'Blood Group', vitals: 'Vitals', labs: 'Recent Labs',
+            allergies: 'Allergies (from document)', chronic_conditions: 'Chronic Conditions (from document)',
+            medications: 'Medications', diagnoses: 'Diagnoses'
+          };
+          let rows = '';
+          Object.keys(extracted).forEach(key => {
+            const label = knownFieldLabels[key] || key.replace(/_/g, ' ');
+            const val = extracted[key];
+            rows += `<p style="margin-bottom:0.25rem;"><strong>${label}:</strong> ${Array.isArray(val) ? val.join(', ') : val}</p>`;
+          });
+          const verifiedBadge = doc.is_doctor_verified
+            ? '<span class="badge badge-success">Doctor Verified</span>'
+            : '<span class="badge badge-secondary">Not Yet Verified</span>';
+          return `
+            <div style="border:1px dashed var(--border); border-radius:var(--radius-sm); padding:0.7rem; margin-bottom:0.6rem;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
+                <span style="font-size:0.75rem; color:var(--text-muted);">${doc.created_at ? new Date(doc.created_at).toLocaleDateString() : ''}</span>
+                ${verifiedBadge}
+              </div>
+              ${rows || '<p style="color:var(--text-muted);">No structured fields extracted yet.</p>'}
+              ${doc.doctor_notes ? `<p style="margin-top:0.4rem;"><strong>Doctor Notes:</strong> ${doc.doctor_notes}</p>` : ''}
+            </div>
+          `;
+        }).join('');
+      }
+
+      // Past consultations, most recent first
+      const consultEl = document.getElementById('hist-consultations');
+      const consultations = data.consultations || [];
+      if (!consultations.length) {
+        consultEl.innerHTML = 'No past consultations on file.';
+      } else {
+        consultEl.innerHTML = consultations.map(c => {
+          let dept = 'General Medicine', complaint = 'No summary recorded', urgency = 'ROUTINE';
+          try {
+            const summary = typeof c.ai_structured_summary === 'string' ? JSON.parse(c.ai_structured_summary) : c.ai_structured_summary;
+            if (summary) {
+              dept = summary.department || dept;
+              complaint = summary.primary_complaint || complaint;
+              urgency = summary.urgency || urgency;
+            }
+          } catch (e) { /* keep defaults */ }
+          const dateStr = c.created_at ? new Date(c.created_at).toLocaleDateString() : 'Date unknown';
+          return `
+            <div style="border-bottom:1px solid var(--border); padding:0.6rem 0;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <strong style="font-size:0.85rem;">${dept}</strong>
+                <span class="badge ${urgency === 'EMERGENCY' ? 'badge-danger' : 'badge-success'}">${urgency}</span>
+              </div>
+              <p style="font-size:0.8rem; margin-top:0.2rem;">${complaint}</p>
+              <p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.2rem;">${dateStr} • ${c.consultation_type === 'FOLLOWUP' ? 'Follow-up' : 'Fresh'}</p>
+            </div>
+          `;
+        }).join('');
+      }
+
+      document.getElementById('hist-loading').style.display = 'none';
+      document.getElementById('hist-content').style.display = 'block';
+    }
+
+    function closePrescriptionImageModal() {
+      document.getElementById('image-modal').style.display = 'none';
+    }
+
+    function addMedicineRow() {
+      const table = document.getElementById('rx-table').getElementsByTagName('tbody')[0];
+      const newRow = table.insertRow();
+      newRow.innerHTML = `
+        <td><input type="text" class="input-field" value="Tab Atorvastatin" style="padding:0.3rem;" /></td>
+        <td><input type="text" class="input-field" value="20 mg" style="padding:0.3rem;" /></td>
+        <td><input type="text" class="input-field" value="0-0-1" style="padding:0.3rem;" /></td>
+        <td><input type="text" class="input-field" value="30 Days" style="padding:0.3rem;" /></td>
+      `;
+    }
+
+    async function removeFromQueue(queueId) {
+      if (!queueId) return;
+      if (!confirm('Remove this patient from the live queue?')) return;
+
+      try {
+        const response = await fetch(`http://127.0.0.1:8000/api/doctor/queue/${queueId}`, {
+          method: 'DELETE'
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          alert('Could not remove patient: ' + (data.detail || 'Unknown error'));
+          return;
+        }
+
+        if (selectedQueueId === queueId) selectedQueueId = null;
+        fetchLiveDoctorQueue();
+      } catch (err) {
+        console.error('Remove Queue Error:', err);
+        alert('Server error while removing patient from queue.');
+      }
+    }
+
+    function completeConsultation() {
+      alert('Consultation marked complete — patient removed from the live queue.');
+
+      if (selectedQueueId) {
+        fetch(`http://127.0.0.1:8000/api/doctor/queue/${selectedQueueId}`, { method: 'DELETE' })
+          .then(() => {
+            selectedQueueId = null;
+            selectedPatientId = null;
+            fetchLiveDoctorQueue();
+          })
+          .catch(err => console.error('Complete Consultation removal error:', err));
+      }
+    }
+
+    // --- DOCTOR REVIEW (patient-submitted, real star rating required) ---
+    let selectedReviewRating = 0;
+
+    function selectReviewRating(value) {
+      selectedReviewRating = value;
+      document.querySelectorAll('#review-star-picker .review-star').forEach(star => {
+        const starValue = parseInt(star.dataset.value, 10);
+        star.innerText = starValue <= value ? '★' : '☆';
+        star.style.color = starValue <= value ? '#f59e0b' : 'inherit';
+      });
+      const labels = ['', 'Poor', 'Fair', 'Good', 'Very Good', 'Excellent'];
+      document.getElementById('review-rating-label').innerText = `${value} star${value > 1 ? 's' : ''} — ${labels[value]}`;
+    }
+
+    async function submitDoctorReview() {
+      if (!selectedReviewRating) {
+        alert('Please tap a star to rate your visit before submitting.');
+        return;
+      }
+      const comment = document.getElementById('review-comment').value.trim();
+
+      try {
+        const res = await fetch('http://127.0.0.1:8000/api/reviews', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            doctor_id: 1,
+            patient_id: patientId || null,
+            rating: selectedReviewRating,
+            comment: comment || null
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { alert(data.detail || 'Could not submit review.'); return; }
+
+        alert('Thank you! Your review has been recorded.');
+        selectedReviewRating = 0;
+        document.querySelectorAll('#review-star-picker .review-star').forEach(star => { star.innerText = '☆'; star.style.color = 'inherit'; });
+        document.getElementById('review-rating-label').innerText = 'Tap a star to rate.';
+        document.getElementById('review-comment').value = '';
+        switchView('landing');
+      } catch (err) {
+        console.error('Review submission failed:', err);
+        alert('Could not reach the server to submit your review.');
+      }
+    }
+
+    // --- NEW LOGIN CHECK LOGIC ---
+    async function checkUserExistence() {
+      const mobile = document.getElementById('login-identifier-input').value.trim();
+      const dob = document.getElementById('login-dob-input').value;
+
+      if (!mobile || !dob) {
+        alert("Please enter both your identifier and Date of Birth.");
+        return;
+      }
+
+      if (loginIdentifierType === 'MOBILE') {
+        try {
+          const res = await fetch(`http://127.0.0.1:8000/api/patient/check?mobile=${mobile}`);
+          const data = await res.json();
+          
+          document.getElementById('login-check-btn').style.display = 'none';
+          document.getElementById('dynamic-auth-options').style.display = 'block';
+
+          if (data.exists) {
+            document.getElementById('auth-method-toggle-group').style.display = 'block';
+            document.getElementById('new-user-name-group').style.display = 'none';
+            selectLoginMethod('PASSWORD');
+          } else {
+            document.getElementById('auth-method-toggle-group').style.display = 'none';
+            document.getElementById('new-user-name-group').style.display = 'block';
+            selectLoginMethod('OTP');
+          }
+          lucide.createIcons();
+        } catch (err) {
+          console.error("Failed to check user existence", err);
+          alert("Could not reach the server.");
+        }
+      } else {
+        document.getElementById('login-check-btn').style.display = 'none';
+        document.getElementById('dynamic-auth-options').style.display = 'block';
+        selectLoginMethod('OTP');
+        lucide.createIcons();
+      }
+    }
+
+    // --- NEW DOCTOR-TO-PATIENT REVIEW LOGIC ---
+    async function openPatientReviewPrompt() {
+      if (!selectedPatientId) {
+        alert("Please select a patient from the queue first.");
+        return;
+      }
+      
+      const ratingStr = prompt("Rate this patient's cooperation/behavior (1-5 stars):");
+      if (!ratingStr) return;
+      
+      const rating = parseInt(ratingStr, 10);
+      if (isNaN(rating) || rating < 1 || rating > 5) {
+        alert("Invalid rating. Must be between 1 and 5.");
+        return;
+      }
+
+      const comment = prompt("Any comments for internal doctor records? (Optional)") || "";
+
+      try {
+        const res = await fetch('http://127.0.0.1:8000/api/patient-reviews', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            doctor_id: currentUser?.doctorId || 1, 
+            patient_id: selectedPatientId,
+            rating: rating,
+            comment: comment
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        
+        if (!res.ok) { 
+          alert(data.detail || 'Could not submit patient review.'); 
+          return; 
+        }
+        alert("Patient review saved to internal records successfully.");
+      } catch (err) {
+        console.error('Patient review submission failed:', err);
+        alert('Could not reach the server to submit the review.');
+      }
+    }
+  </script>
+</body>
+</html>

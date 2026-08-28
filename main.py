@@ -64,7 +64,7 @@ app.add_middleware(
 )
 
 # Initialize Google GenAI client for Gemini 2.5 Flash
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY", "AQ.Ab8RN6LNVHmKXzW8KTB5HUOmnePj4eW_lzFWjBLPYSDSF0HSag"))
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 @app.get("/")
 def serve_frontend():
     if not os.path.exists("test.html"):

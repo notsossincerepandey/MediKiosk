@@ -1042,7 +1042,7 @@
         formData.append('history', JSON.stringify(conversationHistory));
 
         try {
-          const response = await fetch('http://127.0.0.1:8000/api/ai/voice-chat', {
+          const response = await fetch('https://medikiosk-backend-5e3y.onrender.com/api/ai/voice-chat', {
             method: 'POST',
             body: formData
           });
@@ -1132,7 +1132,7 @@
       const langChoice = document.getElementById('p-login-lang').value;
 
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/ai/chat', {
+        const response = await fetch('https://medikiosk-backend-5e3y.onrender.com/api/ai/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: text, language: langChoice, history: conversationHistory })
@@ -1265,7 +1265,7 @@
       const dobVal = document.getElementById('login-dob-input').value; // "" or "YYYY-MM-DD"
 
       try {
-        const res = await fetch('http://127.0.0.1:8000/api/patient/authenticate', {
+        const res = await fetch('https://medikiosk-backend-5e3y.onrender.com/api/patient/authenticate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1298,7 +1298,7 @@
       const dobVal = document.getElementById('login-dob-input').value; // "" or "YYYY-MM-DD"
 
       try {
-        const res = await fetch('http://127.0.0.1:8000/api/patient/login', {
+        const res = await fetch('https://medikiosk-backend-5e3y.onrender.com/api/patient/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ mobile: identifier, full_name: nameVal || undefined, dob: dobVal || undefined })
@@ -1409,7 +1409,7 @@
         const abhaNumber = document.getElementById('abha-success-number').innerText;
         const abhaAddress = document.getElementById('abha-success-address').innerText;
         try {
-          await fetch('http://127.0.0.1:8000/api/patient/link-abha', {
+          await fetch('https://medikiosk-backend-5e3y.onrender.com/api/patient/link-abha', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ patient_id: patientId, abha_number: abhaNumber, abha_address: abhaAddress })
@@ -1427,7 +1427,7 @@
       if (!patientId) { alert('No linked patient profile found.'); return; }
       if (!confirm('Delink your ABHA ID? You will need to link it again before your next visit.')) return;
 
-      fetch(`http://127.0.0.1:8000/api/patient/${patientId}/delink-abha`, { method: 'POST' })
+      fetch(`https://medikiosk-backend-5e3y.onrender.com/api/patient/${patientId}/delink-abha`, { method: 'POST' })
         .then(res => res.json())
         .then(() => {
           abhaLinked = false;
@@ -1458,7 +1458,7 @@
       if (!current || !next) { alert('Please fill in both fields.'); return; }
 
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/patient/${patientId}/reset-password`, {
+        const res = await fetch(`https://medikiosk-backend-5e3y.onrender.com/api/patient/${patientId}/reset-password`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ current_password: current, new_password: next })
@@ -1501,7 +1501,7 @@
       }
 
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/patient/${patientId}/consultations`);
+        const res = await fetch(`https://medikiosk-backend-5e3y.onrender.com/api/patient/${patientId}/consultations`);
         const data = await res.json();
         const consultations = data.consultations || [];
 
@@ -1546,7 +1546,7 @@
       if (!staffId || !pwd) { alert('Please enter your Staff ID and password.'); return; }
 
       try {
-        const res = await fetch('http://127.0.0.1:8000/api/doctor/authenticate', {
+        const res = await fetch('https://medikiosk-backend-5e3y.onrender.com/api/doctor/authenticate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ staff_id: staffId, password: pwd })
@@ -1575,7 +1575,7 @@
       if (!current || !next) { alert('Please fill in both fields.'); return; }
 
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/doctor/${currentUser.doctorId}/reset-password`, {
+        const res = await fetch(`https://medikiosk-backend-5e3y.onrender.com/api/doctor/${currentUser.doctorId}/reset-password`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ current_password: current, new_password: next })
@@ -1663,7 +1663,7 @@
       };
 
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/intake', {
+        const response = await fetch('https://medikiosk-backend-5e3y.onrender.com/api/intake', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -1680,14 +1680,14 @@
         }
       } catch (err) {
         console.error('Fetch Error:', err);
-        alert('Could not connect to FastAPI server at http://127.0.0.1:8000. Is it running?');
+        alert('Could not connect to FastAPI server at https://medikiosk-backend-5e3y.onrender.com. Is it running?');
       }
     }
 
     // --- LIVE FASTAPI INTEGRATION: FETCH DOCTOR QUEUE ---
     async function fetchLiveDoctorQueue() {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/doctor/queue');
+        const response = await fetch('https://medikiosk-backend-5e3y.onrender.com/api/doctor/queue');
         const data = await response.json();
         cachedQueue = data.queue || [];
 
@@ -1796,7 +1796,7 @@
       document.getElementById('hist-content').style.display = 'none';
 
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/patient/${selectedPatientId}/medical-history`);
+        const res = await fetch(`https://medikiosk-backend-5e3y.onrender.com/api/patient/${selectedPatientId}/medical-history`);
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           alert(data.detail || 'Could not load medical history.');
@@ -1914,7 +1914,7 @@
       if (!confirm('Remove this patient from the live queue?')) return;
 
       try {
-        const response = await fetch(`http://127.0.0.1:8000/api/doctor/queue/${queueId}`, {
+        const response = await fetch(`https://medikiosk-backend-5e3y.onrender.com/api/doctor/queue/${queueId}`, {
           method: 'DELETE'
         });
         const data = await response.json();
@@ -1936,7 +1936,7 @@
       alert('Consultation marked complete — patient removed from the live queue.');
 
       if (selectedQueueId) {
-        fetch(`http://127.0.0.1:8000/api/doctor/queue/${selectedQueueId}`, { method: 'DELETE' })
+        fetch(`https://medikiosk-backend-5e3y.onrender.com/api/doctor/queue/${selectedQueueId}`, { method: 'DELETE' })
           .then(() => {
             selectedQueueId = null;
             selectedPatientId = null;
@@ -1968,7 +1968,7 @@
       const comment = document.getElementById('review-comment').value.trim();
 
       try {
-        const res = await fetch('http://127.0.0.1:8000/api/reviews', {
+        const res = await fetch('https://medikiosk-backend-5e3y.onrender.com/api/reviews', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2005,7 +2005,7 @@
 
       if (loginIdentifierType === 'MOBILE') {
         try {
-          const res = await fetch(`http://127.0.0.1:8000/api/patient/check?mobile=${mobile}`);
+          const res = await fetch(`https://medikiosk-backend-5e3y.onrender.com/api/patient/check?mobile=${mobile}`);
           const data = await res.json();
           
           document.getElementById('login-check-btn').style.display = 'none';
@@ -2052,7 +2052,7 @@
       const comment = prompt("Any comments for internal doctor records? (Optional)") || "";
 
       try {
-        const res = await fetch('http://127.0.0.1:8000/api/patient-reviews', {
+        const res = await fetch('https://medikiosk-backend-5e3y.onrender.com/api/patient-reviews', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

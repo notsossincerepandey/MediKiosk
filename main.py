@@ -12,6 +12,9 @@ import traceback
 import hashlib
 import secrets
 import datetime
+import threading
+import time
+import asyncio
 from google import genai
 from google.genai import types
 
@@ -63,8 +66,109 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize Google GenAI client for Gemini 2.5 Flash
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+# --- GEMINI API KEY POOL ----------------------------------------------------
+# Reads a comma-separated pool of keys from GEMINI_API_KEYS (falls back to the
+# single-key GEMINI_API_KEY for backward compatibility / local dev with one key).
+# Round-robins across the pool and puts any key that comes back 429/RESOURCE_EXHAUSTED
+# on a cooldown timer instead of failing the request.
+
+KEY_COOLDOWN_SECONDS = 65
+
+def _load_gemini_keys() -> list:
+    raw = os.getenv("GEMINI_API_KEYS", "")
+    keys = [k.strip() for k in raw.split(",") if k.strip()]
+    if not keys:
+        single = os.getenv("GEMINI_API_KEY")
+        if single:
+            keys = [single.strip()]
+    return keys
+
+class GeminiKeyManager:
+    """Thread-safe round-robin pool of Gemini API keys with automatic cooldown on 429s.
+
+    - keys_in_order() hands back the full key list starting from the next
+      round-robin position, with any keys currently on cooldown moved to the
+      end (soonest-to-recover first) rather than dropped, so we still have
+      something to try if every key happens to be cooling down at once.
+    - A single genai.Client is created per key up front and reused, so retrying
+      across keys is just picking a different cached client, not reconnecting.
+    """
+
+    def __init__(self, keys: list, cooldown_seconds: int = KEY_COOLDOWN_SECONDS):
+        if not keys:
+            raise RuntimeError(
+                "No Gemini API keys configured. Set GEMINI_API_KEYS as a comma-separated "
+                "list (or GEMINI_API_KEY for a single key)."
+            )
+        self._keys = keys
+        self._cooldown_seconds = cooldown_seconds
+        self._lock = threading.Lock()
+        self._cooldown_until = {k: 0.0 for k in self._keys}
+        self._next_start = 0
+        self._clients = {k: genai.Client(api_key=k) for k in self._keys}
+        logger.info("Gemini key pool initialized with %d key(s).", len(self._keys))
+
+    def _label(self, key: str) -> str:
+        return f"...{key[-4:]}" if len(key) > 4 else "key"
+
+    def keys_in_order(self) -> list:
+        with self._lock:
+            n = len(self._keys)
+            start = self._next_start
+            self._next_start = (self._next_start + 1) % n
+            order = [self._keys[(start + i) % n] for i in range(n)]
+            now = time.monotonic()
+            ready = [k for k in order if self._cooldown_until[k] <= now]
+            cooling = sorted(
+                (k for k in order if self._cooldown_until[k] > now),
+                key=lambda k: self._cooldown_until[k],
+            )
+        return ready + cooling  # cooling keys last, soonest-available first
+
+    def mark_cooldown(self, key: str):
+        with self._lock:
+            self._cooldown_until[key] = time.monotonic() + self._cooldown_seconds
+        logger.warning("Gemini key %s hit a rate limit; cooling down for %ss.", self._label(key), self._cooldown_seconds)
+
+    def client_for(self, key: str) -> genai.Client:
+        return self._clients[key]
+
+key_manager = GeminiKeyManager(_load_gemini_keys())
+
+def _is_rate_limit_error(exc: Exception) -> bool:
+    """Detect HTTP 429 / RESOURCE_EXHAUSTED across the ways the google-genai SDK
+    can surface it (typed exception attributes, or just the string message)."""
+    status_code = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+    if status_code == 429:
+        return True
+    message = str(exc).lower()
+    return "429" in message or "resource_exhausted" in message or "rate limit" in message
+
+def generate_with_key_pool(**generate_kwargs):
+    """Drop-in replacement for client.models.generate_content(...) that rotates
+    across the key pool. On a 429 from one key, that key is put on cooldown and
+    the same request is immediately retried with the next available key — the
+    caller never sees the 429 unless every key in the pool is exhausted."""
+    last_error = None
+    tried = 0
+    for key in key_manager.keys_in_order():
+        client_for_key = key_manager.client_for(key)
+        tried += 1
+        try:
+            return client_for_key.models.generate_content(**generate_kwargs)
+        except Exception as e:
+            if _is_rate_limit_error(e):
+                key_manager.mark_cooldown(key)
+                last_error = e
+                logger.warning("Gemini key %s rate-limited (attempt %d/%d); trying next key.",
+                                key_manager._label(key), tried, len(key_manager._keys))
+                continue
+            raise  # non-rate-limit errors (bad request, safety block, etc.) should surface immediately
+    raise HTTPException(
+        status_code=429,
+        detail="All Gemini API keys are currently rate-limited. Please try again shortly."
+    ) from last_error
+
 @app.get("/")
 def serve_frontend():
     if not os.path.exists("test.html"):
@@ -273,7 +377,7 @@ def multilingual_ai_triage(data: AIChatQuery):
         parts=[types.Part.from_text(text=f"Patient Message: '{data.message}'\nPreferred Language: {data.language}")]
     )
     try:
-        response = client.models.generate_content(
+        response = generate_with_key_pool(
             model=GEMINI_MODEL,
             contents=history_contents + [latest_content],
             config=types.GenerateContentConfig(
@@ -283,6 +387,8 @@ def multilingual_ai_triage(data: AIChatQuery):
             ),
         )
         return parse_gemini_json(response)
+    except HTTPException:
+        raise  # e.g. all keys exhausted — already has the right status/detail, don't rewrap
     except Exception as e:
         logger.error("Text chat failed:\n%s", traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Gemini API Error: {str(e)}")
@@ -314,7 +420,12 @@ async def process_voice_chat(file: UploadFile = File(...), language: str = Form(
             ]
         )
 
-        response = client.models.generate_content(
+        # Run the (blocking) SDK call in a worker thread rather than awaiting it directly —
+        # this is an `async def` route, so calling generate_with_key_pool() inline would
+        # block the whole event loop (and every other concurrent request) for the duration
+        # of each Gemini call, including any 429 retries across the key pool.
+        response = await asyncio.to_thread(
+            generate_with_key_pool,
             model=GEMINI_MODEL,
             contents=history_contents + [latest_content],
             config=types.GenerateContentConfig(
@@ -326,6 +437,8 @@ async def process_voice_chat(file: UploadFile = File(...), language: str = Form(
 
         return parse_gemini_json(response)
 
+    except HTTPException:
+        raise  # e.g. all keys exhausted — already has the right status/detail, don't rewrap
     except Exception as e:
         logger.error("Voice chat failed:\n%s", traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Gemini Voice Processing Error: {str(e)}")

@@ -268,26 +268,17 @@ def serve_frontend():
     return FileResponse("test.html")
 
 # Create a reusable connection pool once when the server boots
-# Lazy-loaded connection pool (prevents Render startup freeze)
-db_pool = None
-
 def get_db():
-    global db_pool
-    if db_pool is None:
-        db_url = os.getenv("DATABASE_URL")
-        if db_url:
-            db_pool = psycopg2.pool.ThreadedConnectionPool(minconn=1, maxconn=10, dsn=db_url)
-        else:
-            db_pool = psycopg2.pool.ThreadedConnectionPool(
-                minconn=1,
-                maxconn=10,
-                dbname="medikiosk_test",
-                user="postgres",
-                password="password",
-                host="localhost",
-                port="5432"
-            )
-    return db_pool.getconn()
+    db_url = os.getenv("DATABASE_URL")
+    if db_url:
+        return psycopg2.connect(db_url)
+    return psycopg2.connect(
+        dbname="medikiosk_test",
+        user="postgres",
+        password="password",
+        host="localhost",
+        port="5432"
+    )
 
 class IntakeRequest(BaseModel):
     full_name: str

@@ -36,18 +36,42 @@ def hash_password(password: str) -> str:
     return f"{salt}${digest.hex()}"
 
 def verify_password(password: str, stored_hash: Optional[str]) -> bool:
-    if not stored_hash or "$" not in stored_hash:
+    if not stored_hash:
         return False
-    salt, digest_hex = stored_hash.split("$", 1)
+    if "$" not in stored_hash:
+        return password == stored_hash
     try:
+        salt, digest_hex = stored_hash.split("$", 1)
         check = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), bytes.fromhex(salt), PBKDF2_ITERATIONS)
-    except ValueError:
+        return secrets.compare_digest(check.hex(), digest_hex)
+    except Exception:
         return False
-    return secrets.compare_digest(check.hex(), digest_hex)
 
-def default_password_from_dob(dob: datetime.date) -> str:
-    """MMDDYY, e.g. 14 May 1998 -> '051498'."""
-    return dob.strftime("%m%d%y")
+def default_password_from_dob(dob) -> list:
+    if not dob:
+        return []
+    if isinstance(dob, str):
+        try:
+            from datetime import datetime
+            dob = datetime.strptime(dob.split("T")[0], "%Y-%m-%d").date()
+        except Exception:
+            return [dob.replace("-", "")]
+    return [
+        dob.strftime("%m%d%y"),  # 010307 (MMDDYY)
+        dob.strftime("%d%m%y"),  # 030107 (DDMMYY)
+        dob.strftime("%Y%m%d"),  # 20070103
+        dob.strftime("%d%m%Y"),  # 03012007
+    ]
+
+def canonical_default_password(dob) -> str:
+    """The single canonical default-password string to HASH and store for a given DOB.
+    default_password_from_dob() returns several formats that are all ACCEPTED when
+    verifying a login attempt, but a newly-stored hash needs exactly one string —
+    MMDDYY, matching the first entry in that list."""
+    formats = default_password_from_dob(dob)
+    if not formats:
+        raise ValueError("No date of birth available to derive a default password.")
+    return formats[0]
 
 # Centralized so a future Gemini deprecation only requires one change.
 # The 404 you hit ("gemini-2.5-flash is no longer available to new users")
@@ -267,7 +291,11 @@ def serve_frontend():
         return {"error": "test.html not found in the current directory."}
     return FileResponse("test.html")
 
-# Create a reusable connection pool once when the server boots
+# Opens a fresh connection per request rather than pooling. Every call site is
+# responsible for closing it in a `finally:` block (audited: all endpoints do).
+# On Neon this is fine at kiosk scale; if concurrency grows enough to matter,
+# switch to Neon's pooled connection string (the "-pooler" host in your
+# connection details) rather than reintroducing a client-side pool object.
 def get_db():
     db_url = os.getenv("DATABASE_URL")
     if db_url:
@@ -577,11 +605,21 @@ def patient_login(data: PatientLoginRequest):
     cur = conn.cursor(cursor_factory=RealDictCursor)
     try:
         cur.execute(
-            "SELECT id, full_name, abha_number, abha_address FROM patients WHERE phone_number = %s;",
+            "SELECT id, full_name, abha_number, abha_address, dob, password_hash FROM patients WHERE phone_number = %s;",
             (data.mobile,)
         )
         row = cur.fetchone()
         if row:
+            # If user provided a password, verify it
+            if hasattr(data, "password") and data.password:
+                if row["password_hash"]:
+                    if not verify_password(data.password, row["password_hash"]):
+                        raise HTTPException(status_code=401, detail="Invalid mobile number or password.")
+                else:
+                    valid_dobs = default_password_from_dob(row.get("dob"))
+                    if data.password not in valid_dobs:
+                        raise HTTPException(status_code=401, detail="Invalid mobile number or password.")
+
             return {
                 "patient_id": row["id"],
                 "full_name": row["full_name"],
@@ -594,14 +632,16 @@ def patient_login(data: PatientLoginRequest):
         if not data.dob:
             raise HTTPException(
                 status_code=400,
-                detail="This mobile number isn't registered yet — please provide your date of birth to create your profile."
+                detail="This mobile number isn't registered yet - please provide your date of birth to create your profile."
             )
         try:
             dob_date = datetime.date.fromisoformat(data.dob)
         except ValueError:
             raise HTTPException(status_code=400, detail="Date of birth must be in YYYY-MM-DD format.")
 
-        default_password_hash = hash_password(default_password_from_dob(dob_date))
+        # Set default password hash as the MMDDYY format
+        dob_default_str = dob_date.strftime("%m%d%y")
+        default_password_hash = hash_password(dob_default_str)
 
         cur.execute(
             """
@@ -647,7 +687,7 @@ def authenticate_patient(data: PatientAuthRequest):
     cur = conn.cursor(cursor_factory=RealDictCursor)
     try:
         cur.execute(
-            "SELECT id, full_name, password_hash, abha_number, abha_address FROM patients WHERE phone_number = %s;",
+            "SELECT id, full_name, password_hash, abha_number, abha_address, dob FROM patients WHERE phone_number = %s;",
             (data.mobile,)
         )
         row = cur.fetchone()
@@ -664,7 +704,7 @@ def authenticate_patient(data: PatientAuthRequest):
             except ValueError:
                 raise HTTPException(status_code=400, detail="Date of birth must be in YYYY-MM-DD format.")
 
-            default_password_hash = hash_password(default_password_from_dob(dob_date))
+            default_password_hash = hash_password(canonical_default_password(dob_date))
 
             # The password they typed must equal the DOB-derived default the first time —
             # verify it against the hash we're about to store, not the stored one, since
@@ -695,8 +735,23 @@ def authenticate_patient(data: PatientAuthRequest):
                 "is_new": True,
             }
 
-        if not verify_password(data.password, row["password_hash"]):
-            raise HTTPException(status_code=401, detail="Invalid mobile number or password.")
+        # Returning patient. If a password hash was already set, verify against it normally.
+        # If not (e.g. this profile was created via the OTP login flow and never had a
+        # password chosen), fall back to checking the DOB-derived default directly, then
+        # backfill the hash so subsequent logins take the fast path.
+        if row["password_hash"]:
+            if not verify_password(data.password, row["password_hash"]):
+                raise HTTPException(status_code=401, detail="Invalid mobile number or password.")
+        else:
+            valid_dobs = default_password_from_dob(row["dob"])
+            if not valid_dobs or data.password not in valid_dobs:
+                raise HTTPException(status_code=401, detail="Invalid mobile number or password.")
+            cur.execute(
+                "UPDATE patients SET password_hash = %s, password_updated_at = NOW() WHERE id = %s;",
+                (hash_password(data.password), row["id"])
+            )
+            conn.commit()
+
         return {
             "patient_id": row["id"],
             "full_name": row["full_name"],
@@ -725,12 +780,18 @@ def reset_patient_password(patient_id: int, data: PatientPasswordResetRequest):
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     try:
-        cur.execute("SELECT password_hash FROM patients WHERE id = %s;", (patient_id,))
+        cur.execute("SELECT password_hash, dob FROM patients WHERE id = %s;", (patient_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Patient not found.")
-        if not verify_password(data.current_password, row["password_hash"]):
-            raise HTTPException(status_code=401, detail="Current password is incorrect.")
+
+        if row["password_hash"]:
+            if not verify_password(data.current_password, row["password_hash"]):
+                raise HTTPException(status_code=401, detail="Current password is incorrect.")
+        else:
+            valid_dobs = default_password_from_dob(row["dob"])
+            if not valid_dobs or data.current_password not in valid_dobs:
+                raise HTTPException(status_code=401, detail="Current password is incorrect.")
 
         cur.execute(
             "UPDATE patients SET password_hash = %s, password_updated_at = NOW() WHERE id = %s;",
@@ -1115,7 +1176,7 @@ def authenticate_doctor(data: DoctorAuthRequest):
         if not password_hash:
             if not row["dob"]:
                 raise HTTPException(status_code=401, detail="Invalid Staff ID or password.")
-            password_hash = hash_password(default_password_from_dob(row["dob"]))
+            password_hash = hash_password(canonical_default_password(row["dob"]))
             cur.execute("UPDATE doctors SET password_hash = %s WHERE id = %s;", (password_hash, row["id"]))
             conn.commit()
 
@@ -1131,6 +1192,9 @@ def authenticate_doctor(data: DoctorAuthRequest):
     except HTTPException:
         conn.rollback()
         raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         cur.close()
         conn.close()
@@ -1155,7 +1219,7 @@ def reset_doctor_password(doctor_id: int, data: DoctorPasswordResetRequest):
         if not password_hash:
             if not row["dob"]:
                 raise HTTPException(status_code=401, detail="Current password is incorrect.")
-            password_hash = hash_password(default_password_from_dob(row["dob"]))
+            password_hash = hash_password(canonical_default_password(row["dob"]))
             cur.execute("UPDATE doctors SET password_hash = %s WHERE id = %s;", (password_hash, doctor_id))
             conn.commit()
 

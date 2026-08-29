@@ -27,7 +27,7 @@ logger = logging.getLogger("medikiosk")
 # MMDDYY format; they can reset it afterwards to anything they like, and
 # only the hash below is ever stored.
 
-PBKDF2_ITERATIONS = 100_000
+PBKDF2_ITERATIONS = 20_000s
 
 def hash_password(password: str) -> str:
     salt = secrets.token_hex(16)
@@ -82,8 +82,7 @@ GEMINI_MODEL = "gemini-3.6-flash"
 GEMINI_FALLBACK_MODELS = [
     m.strip() for m in os.getenv(
         "GEMINI_FALLBACK_MODELS",
-        "gemini-3.7-flash,gemini-3.5-flash,gemini-3.1-flash-lite,"
-        "gemini-2.5-pro,gemini-2.5-flash,gemini-2.5-flash-lite"
+        "gemini-3.5-flash-lite,gemini-2.5-flash-lite,gemini-3.6-flash,gemini-3.7-flash,gemini-3.5-flash,gemini-2.5-flash,gemini-2.5-pro"
     ).split(",") if m.strip()
 ]
 
@@ -524,7 +523,7 @@ async def process_voice_chat(file: UploadFile = File(...), language: str = Form(
         # of each Gemini call, including any 429 retries across the key pool.
         response = await asyncio.to_thread(
             generate_with_key_pool,
-            model=GEMINI_MODEL,
+            model="gemini-3.1-flash-lite",,
             contents=history_contents + [latest_content],
             config=types.GenerateContentConfig(
                 system_instruction=TRIAGE_SYSTEM_INSTRUCTION,

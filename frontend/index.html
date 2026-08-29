@@ -943,12 +943,20 @@
       const indicator = document.getElementById('speech-status-indicator');
 
       try {
-        currentStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+   currentStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                channelCount: 1,
+                sampleRate: 16000,
+                echoCancellation: true,
+                noiseSuppression: true
+            }
+        });
         recorder = RecordRTC(currentStream, {
-          type: 'audio',
-          mimeType: 'audio/wav',
-          recorderType: StereoAudioRecorder,
-          desiredSampRate: 16000
+            type: 'audio',
+            mimeType: 'audio/wav',
+            recorderType: StereoAudioRecorder,
+            numberOfAudioChannels: 1,
+            desiredSampRate: 16000
         });
         recorder.startRecording();
         isRecording = true;

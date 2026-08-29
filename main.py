@@ -267,17 +267,23 @@ def serve_frontend():
         return {"error": "test.html not found in the current directory."}
     return FileResponse("test.html")
 
-def get_db():
-    db_url = os.getenv("DATABASE_URL")
-    if db_url:
-        return psycopg2.connect(db_url)
-    return psycopg2.connect(
+# Create a reusable connection pool once when the server boots
+DB_URL = os.getenv("DATABASE_URL")
+if DB_URL:
+   db_pool = psycopg2.pool.ThreadedConnectionPool(minconn=1, maxconn=10, dsn=DB_URL)
+else:
+    db_pool = psycopg2.pool.ThreadedConnectionPool(
+        minconn=1,
+        maxconn=10,
         dbname="medikiosk_test",
         user="postgres",
         password="password",
         host="localhost",
         port="5432"
     )
+
+def get_db():
+    return db_pool.getconn()
 
 class IntakeRequest(BaseModel):
     full_name: str

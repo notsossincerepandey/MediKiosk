@@ -55,6 +55,38 @@ def default_password_from_dob(dob: datetime.date) -> str:
 # exact replacement name to put here.
 GEMINI_MODEL = "gemini-3.6-flash"
 
+# If the primary model is exhausted across every key (still rate-limited/overloaded
+# after all retry rounds), fall through to these models in order — same key pool,
+# just a different model per attempt.
+#
+# This list is every model on Google's current Free Tier (as of Aug 2026,
+# https://ai.google.dev/gemini-api/docs/pricing) that's actually a fit for this
+# endpoint: general-purpose, supports multimodal (audio) input via generate_content,
+# and can return structured JSON text output. Deliberately EXCLUDED, even though
+# they're also free: TTS models (audio-out only), Live/streaming models (websocket
+# API, not generate_content), Robotics-ER models (vision-language, not tuned for
+# open-ended clinical chat), embedding models (no text generation), image-generation
+# models (e.g. Nano Banana — actually paid-only despite the "Gemini" name), Gemma
+# (open-weight, different capability profile, not a like-for-like fallback), and
+# gemini-3-flash-preview (still callable, but Google is actively steering developers
+# off it toward gemini-3.5-flash — which is already in this list — so it adds
+# deprecation risk without adding real redundancy).
+# Ordered roughly newest/most-capable first, dropping to the older 2.5 line last:
+#   - gemini-3.7-flash / gemini-3.5-flash: newest Flash tiers, same class as the primary
+#   - gemini-3.1-flash-lite: lighter/cheaper GA model, likely separate capacity pool
+#   - gemini-2.5-pro / gemini-2.5-flash / gemini-2.5-flash-lite: older generation,
+#     but a separate model family entirely, so least likely to share whatever
+#     capacity crunch is hitting the 3.x line
+# Configurable via env var without a redeploy, e.g.
+# GEMINI_FALLBACK_MODELS="gemini-3.5-flash,gemini-2.5-flash".
+GEMINI_FALLBACK_MODELS = [
+    m.strip() for m in os.getenv(
+        "GEMINI_FALLBACK_MODELS",
+        "gemini-3.7-flash,gemini-3.5-flash,gemini-3.1-flash-lite,"
+        "gemini-2.5-pro,gemini-2.5-flash,gemini-2.5-flash-lite"
+    ).split(",") if m.strip()
+]
+
 app = FastAPI()
 
 # Enable CORS for browser access
@@ -135,38 +167,98 @@ class GeminiKeyManager:
 
 key_manager = GeminiKeyManager(_load_gemini_keys())
 
-def _is_rate_limit_error(exc: Exception) -> bool:
-    """Detect HTTP 429 / RESOURCE_EXHAUSTED across the ways the google-genai SDK
-    can surface it (typed exception attributes, or just the string message)."""
-    status_code = getattr(exc, "status_code", None) or getattr(exc, "code", None)
-    if status_code == 429:
-        return True
-    message = str(exc).lower()
-    return "429" in message or "resource_exhausted" in message or "rate limit" in message
+# Status codes/phrases that mean "the shared model backend is overloaded right now" —
+# retryable, but NOT a specific key's fault, so we back off instead of cooling a key down.
+TRANSIENT_STATUS_CODES = {500, 503, 504}
+TRANSIENT_MESSAGE_HINTS = ("503", "unavailable", "500", "internal error", "504", "deadline_exceeded", "overloaded")
 
-def generate_with_key_pool(**generate_kwargs):
-    """Drop-in replacement for client.models.generate_content(...) that rotates
-    across the key pool. On a 429 from one key, that key is put on cooldown and
-    the same request is immediately retried with the next available key — the
-    caller never sees the 429 unless every key in the pool is exhausted."""
+def _classify_gemini_error(exc: Exception) -> str:
+    """Classify a Gemini SDK exception as 'rate_limit', 'transient', or 'fatal'.
+
+    - rate_limit (429 / RESOURCE_EXHAUSTED): that specific key is out of quota —
+      cool it down and hand the request to the next key.
+    - transient (503 UNAVAILABLE, 500 INTERNAL, 504 timeout): the model backend
+      itself is overloaded — every key will see this, so cooling one down does
+      nothing; back off briefly and retry instead.
+    - fatal (bad request, safety block, invalid key, etc.): retrying won't help —
+      surface it immediately rather than burning through the whole pool on it.
+    """
+    status_code = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+    message = str(exc).lower()
+
+    if status_code == 429 or "429" in message or "resource_exhausted" in message or "rate limit" in message:
+        return "rate_limit"
+    if status_code in TRANSIENT_STATUS_CODES or any(hint in message for hint in TRANSIENT_MESSAGE_HINTS):
+        return "transient"
+    return "fatal"
+
+def _generate_across_keys(model: str, max_rounds: int, base_backoff_seconds: float, **generate_kwargs):
+    """Try ONE model across the full key pool (429 cooldown + transient backoff,
+    as described on generate_with_key_pool). Raises the last error if every key
+    is exhausted for this model after `max_rounds` rounds — the caller decides
+    whether to fall back to a different model."""
     last_error = None
-    tried = 0
-    for key in key_manager.keys_in_order():
-        client_for_key = key_manager.client_for(key)
-        tried += 1
-        try:
-            return client_for_key.models.generate_content(**generate_kwargs)
-        except Exception as e:
-            if _is_rate_limit_error(e):
-                key_manager.mark_cooldown(key)
+    for round_num in range(1, max_rounds + 1):
+        for key in key_manager.keys_in_order():
+            client_for_key = key_manager.client_for(key)
+            try:
+                return client_for_key.models.generate_content(model=model, **generate_kwargs)
+            except Exception as e:
+                kind = _classify_gemini_error(e)
                 last_error = e
-                logger.warning("Gemini key %s rate-limited (attempt %d/%d); trying next key.",
-                                key_manager._label(key), tried, len(key_manager._keys))
-                continue
-            raise  # non-rate-limit errors (bad request, safety block, etc.) should surface immediately
+                if kind == "rate_limit":
+                    key_manager.mark_cooldown(key)
+                    logger.warning("Gemini key %s rate-limited on %s (round %d/%d); trying next key.",
+                                    key_manager._label(key), model, round_num, max_rounds)
+                    continue
+                elif kind == "transient":
+                    logger.warning("Gemini key %s hit a transient error on %s (round %d/%d): %s; trying next key.",
+                                    key_manager._label(key), model, round_num, max_rounds, e)
+                    continue
+                raise  # fatal — don't waste the rest of the pool retrying something that can't succeed
+        if round_num < max_rounds:
+            backoff = base_backoff_seconds * (2 ** (round_num - 1))
+            logger.warning("All %d Gemini keys failed round %d/%d on %s; backing off %.1fs before next round.",
+                            len(key_manager._keys), round_num, max_rounds, model, backoff)
+            time.sleep(backoff)
+    raise last_error
+
+def generate_with_key_pool(model: str = GEMINI_MODEL, max_rounds: int = 2, base_backoff_seconds: float = 1.5,
+                            **generate_kwargs):
+    """Drop-in replacement for client.models.generate_content(...) that rotates
+    across the key pool AND, if needed, across models.
+
+    - On a 429 from one key: that key is put on cooldown and the request is
+      immediately retried with the next available key.
+    - On a transient 5xx/UNAVAILABLE (shared backend overload): no key is
+      penalized; every key still gets tried this round, and if the whole pool
+      strikes out, we back off (1.5s, 3s, ...) and run another full round,
+      up to `max_rounds` times, for that model.
+    - If `model` is still exhausted/overloaded after all rounds, we fall
+      through to each model in GEMINI_FALLBACK_MODELS in turn (each getting
+      its own full pass across the key pool) before finally giving up.
+    - Any non-retryable (fatal) error also triggers a fallback attempt on the
+      next model, in case it's model-specific (e.g. a modality or safety
+      setting that only one model version enforces) — but each model only
+      gets to try one key before a fatal error moves on, so this stays fast.
+    The caller only sees a failure if every model AND every key is exhausted.
+    """
+    models_to_try = [model] + [m for m in GEMINI_FALLBACK_MODELS if m != model]
+    last_error = None
+    for attempt_model in models_to_try:
+        try:
+            response = _generate_across_keys(attempt_model, max_rounds, base_backoff_seconds, **generate_kwargs)
+            if attempt_model != model:
+                logger.warning("Served request with fallback model %s (primary %s was unavailable).",
+                                attempt_model, model)
+            return response
+        except Exception as e:
+            last_error = e
+            logger.warning("Model %s exhausted across the whole key pool; trying next model.", attempt_model)
+            continue
     raise HTTPException(
-        status_code=429,
-        detail="All Gemini API keys are currently rate-limited. Please try again shortly."
+        status_code=503,
+        detail="Gemini is currently rate-limited or overloaded across all configured keys and models. Please try again shortly."
     ) from last_error
 
 @app.get("/")

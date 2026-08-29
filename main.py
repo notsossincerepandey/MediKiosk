@@ -4,6 +4,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import psycopg2
+import psycopg2.pool
 from psycopg2.extras import RealDictCursor
 import json
 import os

@@ -27,7 +27,7 @@ logger = logging.getLogger("medikiosk")
 # MMDDYY format; they can reset it afterwards to anything they like, and
 # only the hash below is ever stored.
 
-PBKDF2_ITERATIONS = 20_000s
+PBKDF2_ITERATIONS = 20_000
 
 def hash_password(password: str) -> str:
     salt = secrets.token_hex(16)
@@ -267,21 +267,25 @@ def serve_frontend():
     return FileResponse("test.html")
 
 # Create a reusable connection pool once when the server boots
-DB_URL = os.getenv("DATABASE_URL")
-if DB_URL:
-   db_pool = psycopg2.pool.ThreadedConnectionPool(minconn=1, maxconn=10, dsn=DB_URL)
-else:
-    db_pool = psycopg2.pool.ThreadedConnectionPool(
-        minconn=1,
-        maxconn=10,
-        dbname="medikiosk_test",
-        user="postgres",
-        password="password",
-        host="localhost",
-        port="5432"
-    )
+# Lazy-loaded connection pool (prevents Render startup freeze)
+db_pool = None
 
 def get_db():
+    global db_pool
+    if db_pool is None:
+        db_url = os.getenv("DATABASE_URL")
+        if db_url:
+            db_pool = psycopg2.pool.ThreadedConnectionPool(minconn=1, maxconn=10, dsn=db_url)
+        else:
+            db_pool = psycopg2.pool.ThreadedConnectionPool(
+                minconn=1,
+                maxconn=10,
+                dbname="medikiosk_test",
+                user="postgres",
+                password="password",
+                host="localhost",
+                port="5432"
+            )
     return db_pool.getconn()
 
 class IntakeRequest(BaseModel):
@@ -523,7 +527,7 @@ async def process_voice_chat(file: UploadFile = File(...), language: str = Form(
         # of each Gemini call, including any 429 retries across the key pool.
         response = await asyncio.to_thread(
             generate_with_key_pool,
-            model="gemini-3.1-flash-lite",,
+            model="gemini-3.1-flash-lite",
             contents=history_contents + [latest_content],
             config=types.GenerateContentConfig(
                 system_instruction=TRIAGE_SYSTEM_INSTRUCTION,
